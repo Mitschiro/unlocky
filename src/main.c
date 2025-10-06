@@ -1,4 +1,4 @@
-#include "unlocky.h"
+#include "./../include/unlocky.h"
 #include <stdio.h>
 #include <string.h>
 void processAdd(char *name, char *login, char *pw, char *cmd);
