@@ -10,7 +10,7 @@ typedef enum {
   SUBCMD_GET,
   SUBCMD_MODIFY,
   SUBCMD_DELETE,
-  SUBCMD_CLIPBOARD
+  SUBCMD_SETUP
 } subcmd_t;
 
 typedef struct {
@@ -21,7 +21,7 @@ typedef struct {
 static const subcmd_entry_t SUBCMD_TABLE[] = {
     {"add", SUBCMD_ADD},       {"list", SUBCMD_LIST},
     {"get", SUBCMD_GET},       {"modify", SUBCMD_MODIFY},
-    {"delete", SUBCMD_DELETE}, {"clipboard", SUBCMD_CLIPBOARD},
+    {"delete", SUBCMD_DELETE}, {"setup", SUBCMD_SETUP},
     {NULL, SUBCMD_INVALID}};
 
 // Definition of flags

@@ -3,6 +3,9 @@
 
 #include "unlocky.h"
 #include <sqlite3.h>
+#include <stdio.h>
+
+// #define db_path = "./../db/unlocky.db"
 
 int init_db(const char *db_path);
 int add_entry(sqlite3 *db, data_entry_t *entry);

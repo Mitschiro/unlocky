@@ -1,4 +1,5 @@
-#include "./../include/unlocky.h"
+#include "db.h"
+#include "unlocky.h"
 #include <stdio.h>
 #include <string.h>
 void processAdd(char *name, char *login, char *pw, char *cmd);
@@ -18,10 +19,17 @@ int main(int argc, char *argv[]) {
       break;
     }
   }
+  const char *db_path = "unlocky.db";
+
+  int db_init = init_db(db_path);
+
+  if (db_init != 0) {
+    return -1;
+  }
 
   switch (subcmd) {
   case SUBCMD_INVALID:
-    return 1;
+    return -1;
   case SUBCMD_ADD:
     printf("ADD\n");
     break;
@@ -37,8 +45,8 @@ int main(int argc, char *argv[]) {
   case SUBCMD_DELETE:
     printf("DELETE\n");
     break;
-  case SUBCMD_CLIPBOARD:
-    printf("CLIPBOARD\n");
+  case SUBCMD_SETUP:
+    printf("SETUP\n");
     break;
   }
 
