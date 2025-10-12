@@ -8,10 +8,10 @@
 // #define db_path = "./../db/unlocky.db"
 
 int init_db(const char *db_path);
-int add_entry(sqlite3 *db, data_entry_t *entry);
-int modify_entry(sqlite3 *db, data_entry_t *entry);
-int delete_entry(sqlite3 *db, const char *name);
-int list_entries(sqlite3 *db);
-void close_db(sqlite3 *db);
+int add_entry(data_entry_t *entry, char *master_pw);
+int modify_entry(data_entry_t *entry);
+int delete_entry(const char *name);
+int list_entries();
+void close_db(void);
 
 #endif // DB_H

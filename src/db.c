@@ -1,17 +1,22 @@
-#include "./../include/db.h"
+#include "db.h"
+#include "unlocky.h"
+#include <sodium.h>
 #include <sqlite3.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
+
+static sqlite3 *g_db = NULL;
 
 static const char *CREATE_SQL_TABLE = "CREATE TABLE IF NOT EXISTS unlocky ("
                                       "id INTEGER PRIMARY KEY AUTOINCREMENT, "
                                       "name TEXT UNIQUE NOT NULL, "
                                       "login TEXT, "
-                                      "encrypted_pw TEXT NOT NULL, "
+                                      "encrypted_pw BLOB NOT NULL, "
                                       "cmd TEXT, "
                                       "created_at DATE, "
                                       "updated_at DATE, "
-                                      "totp_seed TEXT"
+                                      "totp_seed BLOB"
                                       ");";
 
 int init_db(const char *db_path) {
@@ -37,4 +42,18 @@ int init_db(const char *db_path) {
   printf("DB has been initialized: %s\n", db_path);
   sqlite3_close(db);
   return 0;
+}
+
+int add_entry(data_entry_t *entry, char *master_pw) {
+  //
+
+  close_db();
+  return 1;
+}
+
+void close_db(void) {
+  if (g_db != NULL) {
+    sqlite3_close(g_db);
+    g_db = NULL;
+  }
 }

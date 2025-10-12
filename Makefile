@@ -1,6 +1,6 @@
 CC = gcc
-CFLAGS = -Wall -std=c99 -Iinclude $(shell pkg-config --cflags sqlite3)
-LDFLAGS = $(shell pkg-config --libs sqlite3)
+CFLAGS = -Wall -std=c99 -Iinclude $(shell pkg-config --cflags sqlite3 libsodium)
+LDFLAGS = $(shell pkg-config --libs sqlite3 libsodium)
 
 all: build/unlocky
 

@@ -2,7 +2,8 @@
 #include "unlocky.h"
 #include <stdio.h>
 #include <string.h>
-void processAdd(char *name, char *login, char *pw, char *cmd);
+#include <time.h>
+int getMasterPw(char *master_pw);
 
 int main(int argc, char *argv[]) {
   if (argc < 2) {
@@ -31,7 +32,66 @@ int main(int argc, char *argv[]) {
   case SUBCMD_INVALID:
     return -1;
   case SUBCMD_ADD:
-    printf("ADD\n");
+    data_entry_t entry = {0};
+    if (argv[2][0] != '-') {
+      printf("Wrong format, after the add cmd a flag has to follow\n");
+      return -1;
+    }
+    int flag_check = 0;
+    for (int i = 2; i < argc;) {
+      if (argv[i][0] == '-' && argv[i + 1][0] != '-') {
+        if (strcmp(argv[i], FLAG_NAME) == 0) {
+          strncpy(entry.name, argv[i + 1], MAX_NAME_LEN - 1);
+          i += 2;
+          flag_check += 1;
+        } else if (strcmp(argv[i], FLAG_LOGIN) == 0) {
+          strncpy(entry.login, argv[i + 1], MAX_LOGIN_LEN - 1);
+          i += 2;
+        } else if (strcmp(argv[i], FLAG_PW) == 0) {
+          strncpy(entry.pw, argv[i + 1], MAX_PW_LEN - 1);
+          i += 2;
+          flag_check += 1;
+        } else if (strcmp(argv[i], FLAG_CMD) == 0) {
+          strncpy(entry.cmd, argv[i + 1], MAX_CMD_LEN - 1);
+          i += 2;
+        } else if (strcmp(argv[i], FLAG_TOTP) == 0) {
+          strncpy(entry.totp_seed, argv[i + 1], MAX_PW_LEN - 1);
+          i += 2;
+        } else {
+          i += 1;
+        }
+      } else {
+        i++;
+      }
+    }
+
+    if (flag_check < 2) {
+      fprintf(stderr, "Name (-n) and Password (-p) are mandatory!\n");
+      return -1;
+    }
+
+    printf("ADD: -n %s -l %s -p %s -c %s -o %s\n", entry.name, entry.login,
+           entry.pw, entry.cmd, entry.totp_seed);
+
+    char master_pw[100] = {0};
+    if (getMasterPw(master_pw) == 0) {
+      printf("size: %zu\n", strlen(master_pw));
+
+      printf("Master PW: %s\n", master_pw);
+    } else {
+      fprintf(stderr, "No master pw provided, aborting");
+      return -1;
+    }
+
+    time_t now = time(NULL);
+    struct tm *tm_info = localtime(&now);
+    strftime(entry.created_at, sizeof(entry.created_at), "%Y/%m/%d %H:%M:%S",
+             tm_info);
+    strncpy(entry.updated_at, entry.created_at, sizeof(entry.updated_at) - 1);
+    entry.updated_at[sizeof(entry.updated_at) - 1] = '\0';
+
+    add_entry(&entry, master_pw);
+
     break;
   case SUBCMD_LIST:
     printf("LIST\n");
@@ -50,5 +110,19 @@ int main(int argc, char *argv[]) {
     break;
   }
 
-  return 1;
+  return 0;
+}
+
+int getMasterPw(char *master_pw) {
+  printf("Enter master password: ");
+  fflush(stdout);
+  if (fgets(master_pw, 100, stdin) == NULL) {
+    printf("Input failed.\n");
+    return -1;
+  }
+  master_pw[strcspn(master_pw, "\n")] = '\0';
+  if (strlen(master_pw) == 0) {
+    return -1;
+  }
+  return 0;
 }

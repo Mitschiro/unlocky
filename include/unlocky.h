@@ -30,6 +30,8 @@ static const subcmd_entry_t SUBCMD_TABLE[] = {
 #define FLAG_LOGIN "-l"
 #define FLAG_PW "-p"
 #define FLAG_CMD "-c"
+#define FLAG_TOTP "-o"
+#define FLAG_ALL "-a"
 
 #define MAX_NAME_LEN 50
 #define MAX_LOGIN_LEN 50
@@ -41,6 +43,9 @@ typedef struct {
   char login[MAX_LOGIN_LEN];
   char pw[MAX_PW_LEN];
   char cmd[MAX_CMD_LEN];
+  char created_at[20];
+  char updated_at[20];
+  char totp_seed[MAX_PW_LEN];
 } data_entry_t;
 
 #endif // UNLOCKY_H
