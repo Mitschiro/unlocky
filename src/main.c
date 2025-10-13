@@ -20,9 +20,8 @@ int main(int argc, char *argv[]) {
       break;
     }
   }
-  const char *db_path = "unlocky.db";
 
-  int db_init = init_db(db_path);
+  int db_init = init_db();
 
   if (db_init != 0) {
     return -1;
@@ -90,7 +89,10 @@ int main(int argc, char *argv[]) {
     strncpy(entry.updated_at, entry.created_at, sizeof(entry.updated_at) - 1);
     entry.updated_at[sizeof(entry.updated_at) - 1] = '\0';
 
-    add_entry(&entry, master_pw);
+    // add_entry(&entry, master_pw);
+    if (add_entry(&entry, master_pw) == -1) {
+      fprintf(stderr, "Failed operation, aborting.\n");
+    }
 
     break;
   case SUBCMD_LIST:
