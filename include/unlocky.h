@@ -38,6 +38,8 @@ static const subcmd_entry_t SUBCMD_TABLE[] = {
 #define MAX_PW_LEN 100
 #define MAX_CMD_LEN 200
 
+#define VERSION 1
+
 typedef struct {
   char name[MAX_NAME_LEN];
   char login[MAX_LOGIN_LEN];

@@ -3,12 +3,16 @@
 
 #include "unlocky.h"
 #include <sqlite3.h>
+#include <stdbool.h>
 // #include <stdio.h>
 
 #define DB_PATH "unlocky.db"
 
 int init_db();
 int add_entry(data_entry_t *entry, char *master_pw);
+int get_entry(const char *name, data_entry_t *entry, const char *master_pw,
+              const bool all, const bool login, const bool password,
+              const bool cmd, const bool totp);
 int modify_entry(data_entry_t *entry);
 int delete_entry(const char *name);
 int list_entries();

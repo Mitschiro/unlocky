@@ -2,10 +2,10 @@
 #include "unlocky.h"
 #include <encryption.h>
 #include <sqlite3.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-
 // static sqlite3 *g_db = NULL;
 
 static const char *CREATE_SQL_TABLE = "CREATE TABLE IF NOT EXISTS unlocky ("
@@ -16,7 +16,8 @@ static const char *CREATE_SQL_TABLE = "CREATE TABLE IF NOT EXISTS unlocky ("
                                       "cmd TEXT, "
                                       "created_at DATE, "
                                       "updated_at DATE, "
-                                      "totp_seed BLOB"
+                                      "totp_seed BLOB, "
+                                      "version INTEGER"
                                       ");";
 
 int init_db() {
@@ -80,7 +81,7 @@ int add_entry(data_entry_t *entry, char *master_pw) {
   sqlite3_stmt *stmt = NULL;
   const char *sql =
       "INSERT INTO unlocky (name, login, password, cmd, created_at, "
-      "updated_at, totp_seed) Values (?, ?, ?, ?, ?, ?, ?);";
+      "updated_at, totp_seed, version) Values (?, ?, ?, ?, ?, ?, ?, ?);";
   rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
   if (rc != SQLITE_OK) {
     fprintf(stderr, "SQL prepare failed: %s.\n", sqlite3_errmsg(db));
@@ -96,6 +97,7 @@ int add_entry(data_entry_t *entry, char *master_pw) {
   sqlite3_bind_text(stmt, 5, entry->created_at, -1, SQLITE_STATIC);
   sqlite3_bind_text(stmt, 6, entry->updated_at, -1, SQLITE_STATIC);
   sqlite3_bind_blob(stmt, 7, entry->totp_seed, totp_cipher_len, SQLITE_STATIC);
+  sqlite3_bind_int(stmt, 8, VERSION);
 
   rc = sqlite3_step(stmt);
   sqlite3_finalize(stmt);
@@ -107,6 +109,138 @@ int add_entry(data_entry_t *entry, char *master_pw) {
   }
 
   printf("Added entry for '%s'.", entry->name);
+
+  return 0;
+}
+
+int get_entry(const char *name, data_entry_t *entry, const char *master_pw,
+              const bool all, const bool login, const bool password,
+              const bool cmd, const bool totp) {
+  if (name == NULL || strlen(name) == 0 || entry == NULL || master_pw == NULL ||
+      strlen(master_pw) == 0) {
+    return -1;
+  }
+
+  sqlite3 *db = NULL;
+  int rc = sqlite3_open(DB_PATH, &db);
+  if (rc != SQLITE_OK) {
+    fprintf(stderr, "SQlite open failed: %s\n", sqlite3_errmsg(db));
+    if (db) {
+      sqlite3_close(db);
+    }
+    return -1;
+  }
+
+  char sql[512] = {0};
+  int login_pos = 2;
+  int cmd_pos = 2;
+  int totp_pos = 2;
+  if (all == true) {
+    strcat(sql, "SELECT name, password, login, cmd, created_at, updated_at, "
+                "totp_seed FROM unlocky WHERE name = ?;");
+    cmd_pos = 3;
+    totp_pos = 6;
+  } else {
+    strcat(sql, "SELECT name, password");
+    if (login) {
+      strcat(sql, ", login");
+      cmd_pos += 1;
+      totp_pos += 1;
+    }
+    if (cmd) {
+      strcat(sql, ", cmd");
+      totp_pos += 1;
+    }
+    if (totp) {
+      strcat(sql, ", totp_seed");
+    }
+    strcat(sql, " WHERE name = ?;");
+  }
+
+  if (strlen(sql) == 0) {
+    fprintf(stderr, "Couldn't fetch entry, missing flags.\n");
+    return -1;
+  }
+
+  sqlite3_stmt *stmt = NULL;
+  rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+  if (rc != SQLITE_OK) {
+    if (stmt != NULL) {
+      sqlite3_finalize(stmt);
+    }
+    sqlite3_close(db);
+    return -1;
+  }
+
+  sqlite3_bind_text(stmt, 1, name, -1, SQLITE_STATIC);
+
+  if (sqlite3_step(stmt) == SQLITE_ROW) {
+    const unsigned char *pw_blob = sqlite3_column_blob(stmt, 1);
+    int pw_len = sqlite3_column_bytes(stmt, 1);
+    if (pw_blob && pw_len > 0) {
+      memcpy(entry->pw, pw_blob, pw_len < MAX_PW_LEN ? pw_len : MAX_PW_LEN - 1);
+      entry->pw[MAX_PW_LEN - 1] = '\0';
+      unsigned long long plain_pw_len = decrypt_value(entry->pw, master_pw);
+      if (plain_pw_len == 0) {
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        return -1;
+      }
+    }
+
+    if (totp || all) {
+      const unsigned char *totp_blob = sqlite3_column_blob(stmt, totp_pos);
+      int totp_len = sqlite3_column_bytes(stmt, totp_pos);
+      if (totp_blob && totp_len > 0) {
+        memcpy(entry->totp_seed, totp_blob,
+               totp_len < MAX_PW_LEN ? totp_len : MAX_PW_LEN - 1);
+        entry->totp_seed[MAX_PW_LEN - 1] = '\0';
+        unsigned long long plain_totp_len =
+            decrypt_value(entry->totp_seed, master_pw);
+        if (plain_totp_len == 0) {
+          sqlite3_finalize(stmt);
+          sqlite3_close(db);
+          return -1;
+        }
+      }
+    }
+
+    const char *col_name = (const char *)sqlite3_column_text(stmt, 0);
+    strncpy(entry->name, col_name ? col_name : "", MAX_NAME_LEN - 1);
+    entry->name[MAX_NAME_LEN - 1] = '\0';
+
+    if (all || login) {
+      const char *col_login =
+          (const char *)sqlite3_column_text(stmt, login_pos);
+      strncpy(entry->login, col_login ? col_login : "", MAX_LOGIN_LEN - 1);
+      entry->login[MAX_NAME_LEN - 1] = '\0';
+    }
+
+    if (all || cmd) {
+      const char *col_cmd = (const char *)sqlite3_column_text(stmt, cmd_pos);
+      strncpy(entry->cmd, col_cmd ? col_cmd : "", MAX_CMD_LEN - 1);
+      entry->cmd[MAX_CMD_LEN - 1] = '\0';
+    }
+
+    if (all) {
+      const char *col_created = (const char *)sqlite3_column_text(stmt, 4);
+      strncpy(entry->created_at, col_created ? col_created : "",
+              sizeof(entry->created_at) - 1);
+      entry->created_at[sizeof(entry->created_at) - 1] = '\0';
+
+      const char *col_updated = (const char *)sqlite3_column_text(stmt, 5);
+      strncpy(entry->updated_at, col_updated ? col_updated : "",
+              sizeof(entry->updated_at) - 1);
+      entry->updated_at[sizeof(entry->updated_at) - 1] = '\0';
+    }
+  } else {
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return -1;
+  }
+
+  sqlite3_finalize(stmt);
+  sqlite3_close(db);
 
   return 0;
 }
