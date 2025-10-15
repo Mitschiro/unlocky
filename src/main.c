@@ -89,7 +89,6 @@ int main(int argc, char *argv[]) {
     strncpy(entry.updated_at, entry.created_at, sizeof(entry.updated_at) - 1);
     entry.updated_at[sizeof(entry.updated_at) - 1] = '\0';
 
-    // add_entry(&entry, master_pw);
     if (add_entry(&entry, master_pw) == -1) {
       fprintf(stderr, "Failed operation, aborting.\n");
     }
@@ -100,6 +99,13 @@ int main(int argc, char *argv[]) {
     break;
   case SUBCMD_GET:
     printf("GET\n");
+    data_entry_t get_entry_d = {0};
+    get_entry("test", &get_entry_d, "test", true, false, false, false, false);
+    printf("Name: %s, Login: %s, Password: %s, Command: %s, created_at: %s, "
+           "updated_at: %s, totp: %s\n",
+           get_entry_d.name, get_entry_d.login, get_entry_d.pw, get_entry_d.cmd,
+           get_entry_d.created_at, get_entry_d.updated_at,
+           get_entry_d.totp_seed);
     break;
   case SUBCMD_MODIFY:
     printf("MODIFY\n");

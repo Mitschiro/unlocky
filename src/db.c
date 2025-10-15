@@ -3,6 +3,7 @@
 #include <encryption.h>
 #include <sqlite3.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -120,7 +121,8 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw,
       strlen(master_pw) == 0) {
     return -1;
   }
-
+  // debug
+  printf("Master pw: %s\n", master_pw);
   sqlite3 *db = NULL;
   int rc = sqlite3_open(DB_PATH, &db);
   if (rc != SQLITE_OK) {
@@ -177,10 +179,16 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw,
   if (sqlite3_step(stmt) == SQLITE_ROW) {
     const unsigned char *pw_blob = sqlite3_column_blob(stmt, 1);
     int pw_len = sqlite3_column_bytes(stmt, 1);
+
     if (pw_blob && pw_len > 0) {
       memcpy(entry->pw, pw_blob, pw_len < MAX_PW_LEN ? pw_len : MAX_PW_LEN - 1);
       entry->pw[MAX_PW_LEN - 1] = '\0';
-      unsigned long long plain_pw_len = decrypt_value(entry->pw, master_pw);
+      // debug
+      printf("PW len: %d, PW Blob: %02x\n", pw_len,
+             (unsigned char)entry->pw[0]);
+
+      unsigned long long plain_pw_len =
+          decrypt_value(entry->pw, master_pw, (size_t)pw_len);
       if (plain_pw_len == 0) {
         sqlite3_finalize(stmt);
         sqlite3_close(db);
@@ -196,7 +204,7 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw,
                totp_len < MAX_PW_LEN ? totp_len : MAX_PW_LEN - 1);
         entry->totp_seed[MAX_PW_LEN - 1] = '\0';
         unsigned long long plain_totp_len =
-            decrypt_value(entry->totp_seed, master_pw);
+            decrypt_value(entry->totp_seed, master_pw, (size_t)totp_len);
         if (plain_totp_len == 0) {
           sqlite3_finalize(stmt);
           sqlite3_close(db);
@@ -219,6 +227,13 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw,
     if (all || cmd) {
       const char *col_cmd = (const char *)sqlite3_column_text(stmt, cmd_pos);
       strncpy(entry->cmd, col_cmd ? col_cmd : "", MAX_CMD_LEN - 1);
+      printf("-------- CMD DEBUG -----------\n");
+      printf("CMD: %s\n", entry->cmd);
+      char const *login_start_pos = strstr(entry->cmd, "%login%");
+      if (login_start_pos) {
+        printf("Login replacment start pos: %s\n", login_start_pos);
+      }
+      printf("-------- CMD DEBUG END --------\n");
       entry->cmd[MAX_CMD_LEN - 1] = '\0';
     }
 

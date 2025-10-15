@@ -34,22 +34,23 @@ unsigned long long encrypt_value(char *value, const char *master_key) {
 
   unsigned long long cipher_len;
   crypto_aead_aes256gcm_encrypt((unsigned char *)(value + SALT_LEN + NONCE_LEN),
-                                &cipher_len, (unsigned char *)value,
-                                plainvalue_len, NULL, 0, NULL,
-                                (unsigned char *)(value + SALT_LEN), key);
+                                &cipher_len,
+                                (unsigned char *)(value + SALT_LEN + NONCE_LEN),
+                                plainvalue_len, NULL, 0, NULL, nonce, key);
 
   return SALT_LEN + NONCE_LEN + cipher_len;
 }
 
-unsigned long long decrypt_value(char *cipher, const char *master_key) {
-  if (cipher == NULL || master_key == NULL || strlen(cipher) == 0 ||
+unsigned long long decrypt_value(char *cipher, const char *master_key,
+                                 size_t total_len) {
+  if (cipher == NULL || master_key == NULL || total_len == 0 ||
       strlen(master_key) == 0) {
     fprintf(stderr, "Malformated parameters for decryption.\n");
     return 0;
   }
 
-  size_t cipher_total_len = strlen(cipher);
-  if (cipher_total_len < (SALT_LEN + NONCE_LEN + TAG_LEN)) {
+  // size_t cipher_total_len = strlen(cipher);
+  if (total_len < (SALT_LEN + NONCE_LEN + TAG_LEN)) {
     fprintf(stderr, "Encrypted pw is too short for decryption.\n");
     return 0;
   }
@@ -70,7 +71,7 @@ unsigned long long decrypt_value(char *cipher, const char *master_key) {
   }
 
   unsigned long long plain_len;
-  unsigned long long cipher_text_len = cipher_total_len - SALT_LEN - NONCE_LEN;
+  unsigned long long cipher_text_len = total_len - SALT_LEN - NONCE_LEN;
   if (crypto_aead_aes256gcm_decrypt(
           (unsigned char *)(cipher + SALT_LEN + NONCE_LEN), &plain_len, NULL,
           (unsigned char *)(cipher + SALT_LEN + NONCE_LEN), cipher_text_len,
@@ -79,7 +80,10 @@ unsigned long long decrypt_value(char *cipher, const char *master_key) {
     return 0;
   }
 
-  cipher[SALT_LEN + NONCE_LEN + plain_len] = '\0';
+  // move n bytes starting at src to byte 0, eg pw + leftover.
+  memmove(cipher, cipher + SALT_LEN + NONCE_LEN, plain_len);
+  // inject str end after pw for print.
+  cipher[plain_len] = '\0';
 
   return plain_len;
 }
