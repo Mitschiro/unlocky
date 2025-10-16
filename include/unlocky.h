@@ -36,9 +36,14 @@ static const subcmd_entry_t SUBCMD_TABLE[] = {
 #define MAX_NAME_LEN 50
 #define MAX_LOGIN_LEN 50
 #define MAX_PW_LEN 100
-#define MAX_CMD_LEN 200
+#define MAX_CMD_LEN 512
 
 #define VERSION 1
+
+#define SEARCH_VALUE_LOGIN "%login%"
+#define SEARCH_VALUE_PASSWORD "%password%"
+#define SEARCH_VALUE_TOTP_SEED "%totp_seed%"
+#define SEARCH_VALUE_TOTP_VALUE "%totp_value%"
 
 typedef struct {
   char name[MAX_NAME_LEN];

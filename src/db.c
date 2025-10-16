@@ -1,4 +1,5 @@
 #include "db.h"
+#include "tools.h"
 #include "unlocky.h"
 #include <encryption.h>
 #include <sqlite3.h>
@@ -228,11 +229,14 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw,
       const char *col_cmd = (const char *)sqlite3_column_text(stmt, cmd_pos);
       strncpy(entry->cmd, col_cmd ? col_cmd : "", MAX_CMD_LEN - 1);
       printf("-------- CMD DEBUG -----------\n");
-      printf("CMD: %s\n", entry->cmd);
-      char const *login_start_pos = strstr(entry->cmd, "%login%");
-      if (login_start_pos) {
-        printf("Login replacment start pos: %s\n", login_start_pos);
-      }
+      printf("CMD before replace: %s\n", entry->cmd);
+      // replace_in_string(entry->cmd, SEARCH_VALUE_LOGIN, entry->login,
+      //                   strlen(entry->login));
+      // printf("New CMD after login replace: %s\n", entry->cmd);
+
+      replace_in_string(entry->cmd, SEARCH_VALUE_PASSWORD, entry->pw,
+                        strlen(entry->pw));
+      printf("New CMD after password replace: %s\n", entry->cmd);
       printf("-------- CMD DEBUG END --------\n");
       entry->cmd[MAX_CMD_LEN - 1] = '\0';
     }
