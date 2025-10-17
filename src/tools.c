@@ -1,35 +1,69 @@
+#include "tools.h"
 #include "unlocky.h"
+#include <sodium/crypto_auth_hmacsha256.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
 int replace_in_string(char *dest_str, const char *search_val,
                       const char *replace_value, size_t replace_value_len) {
-  // printf("replace_in_string dest_str: %s, search_val: %s, replace_value: %s,
-  // "
-  //        "replace_value_len: %td\n",
-  //        dest_str, search_val, replace_value, replace_value_len);
-  char tmp_str[MAX_CMD_LEN];
+  char tmp_str[MAX_CMD_LEN] = {0};
   char *search_val_pos = strstr(dest_str, search_val);
-  // printf("Size of dest_str: %td\n", strlen(dest_str));
-  // printf("search_val_pos: %s | %td\n", search_val_pos,
-  //       search_val_pos - dest_str);
   if (search_val_pos) {
-    //
+
     memcpy(tmp_str, dest_str, search_val_pos - dest_str);
-    printf("After first memcpy: %s\n", tmp_str);
     memcpy(tmp_str + strlen(tmp_str), replace_value, replace_value_len);
-    // memmove(tmp_str + strlen(tmp_str), replace_value, replace_value_len);
-    printf("After second memcpy: %s\n", tmp_str);
 
     memcpy(tmp_str + strlen(tmp_str), search_val_pos + strlen(search_val),
            strlen(search_val_pos) - strlen(search_val));
-    printf("After third memcpy: %s\n", tmp_str);
 
     tmp_str[strlen(tmp_str) + 1] = '\0';
     strcpy(dest_str, tmp_str);
-    // printf("tmp_str: %s\n", tmp_str);
-    //  printf("New search_val_pos: %s\n", search_val_pos);
-    printf("New string: %s\n", dest_str);
   }
   return 1;
+}
+
+int generate_totp(const char *seed, unsigned long long *totp_code,
+                  int *seconds_left) {
+  if (seed == NULL || totp_code == NULL || seconds_left == NULL ||
+      strlen(seed) == 0) {
+    return -1;
+  }
+
+  // get current counter
+  time_t now = time(NULL);
+  uint64_t counter = now / TOTP_STEP;
+
+  // Split uint64 counter into 8 blocks of each block holding 8 bits = 1 byte.
+  // As the crypto algo requires the number to be in the correct order (Big
+  // Edian) and depending on the plattform the order can be little edian, the
+  // output would be garbage. So we pass the counter as an array holding each
+  // byte in the correct order. 0xff is to ensure we ignore everything left of
+  // the last 8 bits.
+  unsigned char counter_bytes[8];
+  counter_bytes[0] = (counter >> 56) & 0xff;
+  counter_bytes[1] = (counter >> 48) & 0xff;
+  counter_bytes[2] = (counter >> 40) & 0xff;
+  counter_bytes[3] = (counter >> 32) & 0xff;
+  counter_bytes[4] = (counter >> 24) & 0xff;
+  counter_bytes[5] = (counter >> 16) & 0xff;
+  counter_bytes[6] = (counter >> 8) & 0xff;
+  counter_bytes[7] = counter & 0xff;
+
+  unsigned char hash[HMAC_SHA256_BYTES];
+  crypto_auth_hmacsha256_state state;
+  crypto_auth_hmacsha256_init(&state, (unsigned char *)seed, strlen(seed));
+  crypto_auth_hmacsha256_update(&state, counter_bytes, 8);
+  crypto_auth_hmacsha256_final(&state, hash);
+
+  int offset = hash[31] & 0xf;
+  uint32_t code = ((hash[offset] & 0x7f) << 24) | (hash[offset + 1] << 16) |
+                  (hash[offset + 2] << 8) | hash[offset + 3];
+
+  *totp_code = code % 1000000;
+
+  *seconds_left = TOTP_STEP - (now % TOTP_STEP);
+
+  return 0;
 }

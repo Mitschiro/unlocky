@@ -100,7 +100,8 @@ int main(int argc, char *argv[]) {
   case SUBCMD_GET:
     printf("GET\n");
     data_entry_t get_entry_d = {0};
-    get_entry("test", &get_entry_d, "test", true, false, false, false, false);
+    get_entry("totptest", &get_entry_d, "test", true, false, false, false,
+              false);
     printf("Name: %s, Login: %s, Password: %s, Command: %s, created_at: %s, "
            "updated_at: %s, totp: %s\n",
            get_entry_d.name, get_entry_d.login, get_entry_d.pw, get_entry_d.cmd,

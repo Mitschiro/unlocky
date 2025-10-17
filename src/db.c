@@ -145,7 +145,7 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw,
     totp_pos = 6;
   } else {
     strcat(sql, "SELECT name, password");
-    if (login) {
+    if (login || cmd) {
       strcat(sql, ", login");
       cmd_pos += 1;
       totp_pos += 1;
@@ -154,12 +154,13 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw,
       strcat(sql, ", cmd");
       totp_pos += 1;
     }
-    if (totp) {
+    if (totp || cmd) {
       strcat(sql, ", totp_seed");
     }
-    strcat(sql, " WHERE name = ?;");
-  }
 
+    strcat(sql, " FROM unlocky WHERE name = ?;");
+  }
+  printf("SQL Statement: %s\n", sql);
   if (strlen(sql) == 0) {
     fprintf(stderr, "Couldn't fetch entry, missing flags.\n");
     return -1;
@@ -206,6 +207,14 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw,
         entry->totp_seed[MAX_PW_LEN - 1] = '\0';
         unsigned long long plain_totp_len =
             decrypt_value(entry->totp_seed, master_pw, (size_t)totp_len);
+
+        unsigned long long totp_code;
+        int seconds_left;
+        if (generate_totp(entry->totp_seed, &totp_code, &seconds_left) != 0) {
+          fprintf(stderr, "TOTP generation failed.\n");
+        }
+        sprintf(entry->totp_seed, "%06llu (%d s left)", totp_code,
+                seconds_left);
         if (plain_totp_len == 0) {
           sqlite3_finalize(stmt);
           sqlite3_close(db);
@@ -230,12 +239,15 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw,
       strncpy(entry->cmd, col_cmd ? col_cmd : "", MAX_CMD_LEN - 1);
       printf("-------- CMD DEBUG -----------\n");
       printf("CMD before replace: %s\n", entry->cmd);
-      // replace_in_string(entry->cmd, SEARCH_VALUE_LOGIN, entry->login,
-      //                   strlen(entry->login));
-      // printf("New CMD after login replace: %s\n", entry->cmd);
+      replace_in_string(entry->cmd, SEARCH_VALUE_LOGIN, entry->login,
+                        strlen(entry->login));
+      printf("New CMD after login replace: %s\n", entry->cmd);
 
       replace_in_string(entry->cmd, SEARCH_VALUE_PASSWORD, entry->pw,
                         strlen(entry->pw));
+      replace_in_string(entry->cmd, SEARCH_VALUE_TOTP_SEED, entry->totp_seed,
+                        strlen(entry->totp_seed));
+
       printf("New CMD after password replace: %s\n", entry->cmd);
       printf("-------- CMD DEBUG END --------\n");
       entry->cmd[MAX_CMD_LEN - 1] = '\0';
