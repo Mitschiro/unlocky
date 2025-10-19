@@ -53,6 +53,8 @@ typedef struct {
   char created_at[20];
   char updated_at[20];
   char totp_seed[MAX_PW_LEN];
+  unsigned long long totp_code;
+  int totp_time;
 } data_entry_t;
 
 #endif // UNLOCKY_H

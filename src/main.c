@@ -100,13 +100,12 @@ int main(int argc, char *argv[]) {
   case SUBCMD_GET:
     printf("GET\n");
     data_entry_t get_entry_d = {0};
-    get_entry("totptest", &get_entry_d, "test", true, false, false, false,
-              false);
-    printf("Name: %s, Login: %s, Password: %s, Command: %s, created_at: %s, "
-           "updated_at: %s, totp: %s\n",
+    get_entry("totptest", &get_entry_d, "test");
+    printf("Name: %s\n, Login: %s\n, Password: %s\n, Command: %s\n, created_at: %s\n, "
+           "updated_at: %s\n, totp_seed: %s\n, totp_code: %06llu with %d seconds left\n",
            get_entry_d.name, get_entry_d.login, get_entry_d.pw, get_entry_d.cmd,
            get_entry_d.created_at, get_entry_d.updated_at,
-           get_entry_d.totp_seed);
+           get_entry_d.totp_seed, get_entry_d.totp_code, get_entry_d.totp_time);
     break;
   case SUBCMD_MODIFY:
     printf("MODIFY\n");

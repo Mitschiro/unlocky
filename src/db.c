@@ -173,13 +173,13 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw) {
       unsigned long long plain_totp_len =
           decrypt_value(entry->totp_seed, master_pw, (size_t)totp_len);
 
-      unsigned long long totp_code;
-      int seconds_left;
-      if (generate_totp(entry->totp_seed, &totp_code, &seconds_left) != 0) {
+      // unsigned long long totp_code;
+      // int seconds_left;
+      if (generate_totp(entry->totp_seed, &entry->totp_code, &entry->totp_time) != 0) {
         fprintf(stderr, "TOTP generation failed.\n");
       }
-      sprintf(entry->totp_seed, "%06llu (%d s left)", totp_code,
-              seconds_left);
+      // sprintf(entry->totp_seed, "%06llu (%d s left)", totp_code,
+      //         seconds_left);
       if (plain_totp_len == 0) {
         sqlite3_finalize(stmt);
         sqlite3_close(db);
@@ -205,8 +205,10 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw) {
   
       replace_in_string(entry->cmd, SEARCH_VALUE_PASSWORD, entry->pw,
                         strlen(entry->pw));
-      replace_in_string(entry->cmd, SEARCH_VALUE_TOTP_SEED, entry->totp_seed,
-                        strlen(entry->totp_seed));
+      char totp_str[20] = {0};
+      sprintf(totp_str, "%06llu", entry->totp_code);
+      replace_in_string(entry->cmd, SEARCH_VALUE_TOTP_SEED, totp_str,
+                        strlen(totp_str));
   
       entry->cmd[MAX_CMD_LEN - 1] = '\0';
     }
