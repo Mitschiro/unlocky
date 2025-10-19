@@ -9,10 +9,10 @@
 #define DB_PATH "unlocky.db"
 
 int init_db();
-int add_entry(data_entry_t *entry, char *master_pw);
+int add_entry(data_entry_t *entry, const char *master_pw);
 int get_entry(const char *name, data_entry_t *entry, const char *master_pw);
-int modify_entry(data_entry_t *entry);
-int delete_entry(const char *name);
+int modify_entry(data_entry_t *entry, const char *master_pw);
+int delete_entry(const char *name, const char *master_pw);
 int list_entries();
 void close_db(void);
 

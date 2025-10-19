@@ -48,7 +48,7 @@ int init_db() {
   return 0;
 }
 
-int add_entry(data_entry_t *entry, char *master_pw) {
+int add_entry(data_entry_t *entry, const char *master_pw) {
   //
   if (entry == NULL || master_pw == 0 || strlen(master_pw) == 0 ||
       strlen(entry->name) == 0 || strlen(entry->pw) == 0) {
@@ -174,13 +174,10 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw) {
       unsigned long long plain_totp_len =
           decrypt_value(entry->totp_seed, master_pw, (size_t)totp_len);
 
-      // unsigned long long totp_code;
-      // int seconds_left;
       if (generate_totp(entry->totp_seed, &entry->totp_code, &entry->totp_time) != 0) {
         fprintf(stderr, "TOTP generation failed.\n");
       }
-      // sprintf(entry->totp_seed, "%06llu (%d s left)", totp_code,
-      //         seconds_left);
+
       if (plain_totp_len == 0) {
         sqlite3_finalize(stmt);
         sqlite3_close(db);
@@ -279,6 +276,74 @@ int list_entries() {
     return -1;
   }
 
+
+  sqlite3_close(db);
+  return 0;
+}
+
+int delete_entry(const char *name, const char *master_pw) {
+  if (name == NULL || master_pw == NULL || strlen(name) == 0 || strlen(master_pw) == 0) {
+    fprintf(stderr, "Missing or malformated parameters.\n");
+    return -1;
+  }
+
+  sqlite3 *db = NULL;
+  int rc = sqlite3_open(DB_PATH, &db);
+  if (rc != SQLITE_OK) {
+    fprintf(stderr, "SQlite open failed: %s\n", sqlite3_errmsg(db));
+    if (db) {
+      sqlite3_close(db);
+    }
+    return -1;
+  }
+
+  const char *sql = "SELECT name, password FROM unlocky where name = ?;";
+  sqlite3_stmt *stmt = NULL;
+  rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+  if (rc != SQLITE_OK) {
+    if (stmt != NULL) {
+      sqlite3_finalize(stmt);
+    }
+    sqlite3_close(db);
+    return -1;
+  }
+  sqlite3_bind_text(stmt, 1, name, -1, SQLITE_STATIC);
+
+  if (sqlite3_step(stmt) == SQLITE_ROW) {
+    const unsigned char *pw_blob = sqlite3_column_blob(stmt, 1);
+    int pw_len = sqlite3_column_bytes(stmt, 1);
+    char pw[MAX_PW_LEN] = {0};
+    if (pw_blob && pw_len > 0) {
+      memcpy(pw, pw_blob, pw_len < MAX_PW_LEN ? pw_len : MAX_PW_LEN - 1);
+      //pw[MAX_PW_LEN - 1] = '\0';
+
+      unsigned long long plain_pw_len =
+          decrypt_value(pw, master_pw, (size_t)pw_len);
+      if (plain_pw_len == 0) {
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        return -1;
+      }
+    }
+  }else {
+    return -1;
+  }
+
+  const char *sql_delete = "DELETE FROM unlocky WHERE name = ?;";
+  stmt = NULL;
+  rc = sqlite3_prepare_v2(db, sql_delete, -1, &stmt, NULL);
+  if (rc != SQLITE_OK) {
+    if (stmt != NULL) {
+      sqlite3_finalize(stmt);
+    }
+    sqlite3_close(db);
+    return -1;
+  }
+  sqlite3_bind_text(stmt, 1, name, -1, SQLITE_STATIC);
+
+  if (sqlite3_step(stmt) == SQLITE_DONE) {
+    printf("Sucessfully deleted entry.\n");
+  }
 
   sqlite3_close(db);
   return 0;

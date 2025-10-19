@@ -98,18 +98,25 @@ int main(int argc, char *argv[]) {
         return -1;
       }
       data_entry_t get_entry_d = {0};
-      get_entry(argv[2], &get_entry_d, master_pw);
-      printf("- Name: %s\n- Login: %s\n- Password: %s\n- Command: %s\n- created_at: %s\n- "
-            "updated_at: %s\n- totp_seed: %s\n- totp_code: %06llu with %d seconds left\n",
-            get_entry_d.name, get_entry_d.login, get_entry_d.pw, get_entry_d.cmd,
-            get_entry_d.created_at, get_entry_d.updated_at,
-            get_entry_d.totp_seed, get_entry_d.totp_code, get_entry_d.totp_time);
+      
+      if (get_entry(argv[2], &get_entry_d, master_pw) == 0) {
+        printf("- Name: %s\n- Login: %s\n- Password: %s\n- Command: %s\n- created_at: %s\n- "
+              "updated_at: %s\n- totp_seed: %s\n- totp_code: %06llu with %d seconds left\n",
+              get_entry_d.name, get_entry_d.login, get_entry_d.pw, get_entry_d.cmd,
+              get_entry_d.created_at, get_entry_d.updated_at,
+              get_entry_d.totp_seed, get_entry_d.totp_code, get_entry_d.totp_time);
+      }
       break;
     case SUBCMD_MODIFY:
       printf("MODIFY\n");
       break;
     case SUBCMD_DELETE:
       printf("DELETE\n");
+      if (getMasterPw(master_pw) != 0) {
+        fprintf(stderr, "No master pw provided, aborting");
+        return -1;
+      }
+      delete_entry(argv[2], master_pw);
       break;
     case SUBCMD_SETUP:
       printf("SETUP\n");

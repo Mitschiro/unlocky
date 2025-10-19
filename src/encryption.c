@@ -66,7 +66,7 @@ unsigned long long decrypt_value(char *cipher, const char *master_key,
                     crypto_pwhash_OPSLIMIT_INTERACTIVE,
                     crypto_pwhash_MEMLIMIT_INTERACTIVE,
                     crypto_pwhash_ALG_ARGON2ID13) != 0) {
-    fprintf(stderr, "Incorrect Master Password for key deriv.");
+    fprintf(stderr, "Incorrect Master Password for key deriv.\n");
     return 0;
   }
 
@@ -76,7 +76,7 @@ unsigned long long decrypt_value(char *cipher, const char *master_key,
           (unsigned char *)(cipher + SALT_LEN + NONCE_LEN), &plain_len, NULL,
           (unsigned char *)(cipher + SALT_LEN + NONCE_LEN), cipher_text_len,
           NULL, 0, (unsigned char *)(cipher + SALT_LEN), key) != 0) {
-    fprintf(stderr, "Decryption failed, wrong password or comprimised?\n");
+    fprintf(stderr, "Decryption failed, wrong password or compromised?\n");
     return 0;
   }
 
