@@ -8,7 +8,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-// static sqlite3 *g_db = NULL;
+
+int list_callback(void*,int,char**,char**);
 
 static const char *CREATE_SQL_TABLE = "CREATE TABLE IF NOT EXISTS unlocky ("
                                       "id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -232,5 +233,62 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw) {
   sqlite3_finalize(stmt);
   sqlite3_close(db);
 
+  return 0;
+}
+
+int list_entries() {
+  sqlite3 *db = NULL;
+  int rc = sqlite3_open(DB_PATH, &db);
+  if (rc != SQLITE_OK) {
+    fprintf(stderr, "SQlite open failed: %s\n", sqlite3_errmsg(db));
+    if (db) {
+      sqlite3_close(db);
+    }
+    return -1;
+  }
+
+  const char *sql_count = "SELECT COUNT(*) FROM unlocky;";
+  sqlite3_stmt *stmt_count = NULL;
+  rc = sqlite3_prepare_v2(db, sql_count, -1, &stmt_count, NULL);
+  if (rc != SQLITE_OK) {
+    if (stmt_count != NULL) {
+      sqlite3_finalize(stmt_count);
+    }
+    sqlite3_close(db);
+    return -1;
+  }
+  
+  int counter = 0;
+  if (sqlite3_step(stmt_count) == SQLITE_ROW) {
+    counter = sqlite3_column_int(stmt_count, counter);
+    printf("Found %d enrtries.\n", counter);
+  }
+
+  sqlite3_finalize(stmt_count);
+
+  const char *sql_list = "SELECT name, created_at, updated_at FROM unlocky;";
+  sqlite3_stmt *stmt_list = NULL;
+  char *sql_err = NULL;
+  rc = sqlite3_exec(db, sql_list, list_callback, NULL, &sql_err);
+  if (rc != SQLITE_OK) {
+    if (stmt_list != NULL) {
+      sqlite3_finalize(stmt_list);
+    }
+    sqlite3_free(sql_err);
+    sqlite3_close(db);
+    return -1;
+  }
+
+
+  sqlite3_close(db);
+  return 0;
+}
+
+int list_callback(void *data, int argc, char **argv, char **col_name) {
+  (void)data;
+  for (int i = 0; i < argc; i++) {
+    printf("%s = %s%s", col_name[i], argv[i] ? argv[i] : "NULL", 
+           i < argc - 1 ? " | " : "\n");
+  }
   return 0;
 }
