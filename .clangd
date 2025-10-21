@@ -1,5 +1,0 @@
-CompileFlags:
-  Add: [-Iinclude]
-  Remove: [-W*]
-Index:
-  Background: Build
