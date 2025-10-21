@@ -51,7 +51,7 @@ unsigned long long decrypt_value(char *cipher, const char *master_key,
 
   // size_t cipher_total_len = strlen(cipher);
   if (total_len < (SALT_LEN + NONCE_LEN + TAG_LEN)) {
-    fprintf(stderr, "Encrypted pw is too short for decryption.\n");
+    fprintf(stderr, "Encrypted value is too short for decryption.\n");
     return 0;
   }
 

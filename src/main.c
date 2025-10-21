@@ -109,9 +109,12 @@ int main(int argc, char *argv[]) {
       break;
     case SUBCMD_MODIFY:
       printf("MODIFY\n");
+      if (getMasterPw(master_pw) != 0) {
+        fprintf(stderr, "No master pw provided, aborting");
+        return -1;
+      }
       break;
     case SUBCMD_DELETE:
-      printf("DELETE\n");
       if (getMasterPw(master_pw) != 0) {
         fprintf(stderr, "No master pw provided, aborting");
         return -1;

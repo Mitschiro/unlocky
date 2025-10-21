@@ -14,9 +14,9 @@ int list_callback(void*,int,char**,char**);
 static const char *CREATE_SQL_TABLE = "CREATE TABLE IF NOT EXISTS unlocky ("
                                       "id INTEGER PRIMARY KEY AUTOINCREMENT, "
                                       "name TEXT UNIQUE NOT NULL, "
-                                      "login TEXT, "
+                                      "login BLOB, "
                                       "password BLOB NOT NULL, "
-                                      "cmd TEXT, "
+                                      "cmd BLOB, "
                                       "created_at DATE, "
                                       "updated_at DATE, "
                                       "totp_seed BLOB, "
@@ -81,6 +81,24 @@ int add_entry(data_entry_t *entry, const char *master_pw) {
     }
   }
 
+  unsigned long long login_cipher_len = 0;
+  if (strlen(entry->login) > 0) {
+    login_cipher_len = encrypt_value(entry->login, master_pw);
+    if (login_cipher_len == 0) {
+      fprintf(stderr, "Login encryption failed.\n");
+      return -1;
+    }
+  }
+
+  unsigned long long cmd_cipher_len = 0;
+  if (strlen(entry->cmd) > 0) {
+    cmd_cipher_len = encrypt_value(entry->cmd, master_pw);
+    if (cmd_cipher_len == 0) {
+      fprintf(stderr, "Command encryption failed.\n");
+      return -1;
+    }
+  }
+
   sqlite3_stmt *stmt = NULL;
   const char *sql =
       "INSERT INTO unlocky (name, login, password, cmd, created_at, "
@@ -94,9 +112,9 @@ int add_entry(data_entry_t *entry, const char *master_pw) {
   }
 
   sqlite3_bind_text(stmt, 1, entry->name, -1, SQLITE_STATIC);
-  sqlite3_bind_text(stmt, 2, entry->login, -1, SQLITE_STATIC);
+  sqlite3_bind_blob(stmt, 2, entry->login, login_cipher_len, SQLITE_STATIC);
   sqlite3_bind_blob(stmt, 3, entry->pw, pw_cipher_len, SQLITE_STATIC);
-  sqlite3_bind_text(stmt, 4, entry->cmd, -1, SQLITE_STATIC);
+  sqlite3_bind_blob(stmt, 4, entry->cmd, cmd_cipher_len, SQLITE_STATIC);
   sqlite3_bind_text(stmt, 5, entry->created_at, -1, SQLITE_STATIC);
   sqlite3_bind_text(stmt, 6, entry->updated_at, -1, SQLITE_STATIC);
   sqlite3_bind_blob(stmt, 7, entry->totp_seed, totp_cipher_len, SQLITE_STATIC);
@@ -111,7 +129,7 @@ int add_entry(data_entry_t *entry, const char *master_pw) {
     return -1;
   }
 
-  printf("Added entry for '%s'.", entry->name);
+  printf("Added entry for '%s'.\n", entry->name);
 
   return 0;
 }
@@ -149,16 +167,44 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw) {
   sqlite3_bind_text(stmt, 1, name, -1, SQLITE_STATIC);
 
   if (sqlite3_step(stmt) == SQLITE_ROW) {
+
+
     const unsigned char *pw_blob = sqlite3_column_blob(stmt, 1);
     int pw_len = sqlite3_column_bytes(stmt, 1);
-
     if (pw_blob && pw_len > 0) {
       memcpy(entry->pw, pw_blob, pw_len < MAX_PW_LEN ? pw_len : MAX_PW_LEN - 1);
       entry->pw[MAX_PW_LEN - 1] = '\0';
 
-      unsigned long long plain_pw_len =
-          decrypt_value(entry->pw, master_pw, (size_t)pw_len);
+      unsigned long long plain_pw_len = decrypt_value(entry->pw, master_pw, (size_t)pw_len);
       if (plain_pw_len == 0) {
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        return -1;
+      }
+    }
+
+    const unsigned char *login_blob = sqlite3_column_blob(stmt, 2);
+    int login_len = sqlite3_column_bytes(stmt, 2);
+    if (login_blob && login_len > 0) {
+      memcpy(entry->login, login_blob, login_len < MAX_LOGIN_LEN ? login_len : MAX_LOGIN_LEN - 1);
+      entry->login[MAX_LOGIN_LEN - 1] = '\0';
+
+      unsigned long long plain_login_len = decrypt_value(entry->login, master_pw, (size_t)login_len);
+      if (plain_login_len == 0) {
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        return -1;
+      }
+    }
+
+    const unsigned char *cmd_blob = sqlite3_column_blob(stmt, 3);
+    int cmd_len = sqlite3_column_bytes(stmt, 3);
+    if (cmd_blob && cmd_len > 0) {
+      memcpy(entry->cmd, cmd_blob, cmd_len < MAX_CMD_LEN ? cmd_len : MAX_CMD_LEN - 1);
+      entry->cmd[MAX_CMD_LEN - 1] = '\0';
+
+      unsigned long long plain_cmd_len = decrypt_value(entry->cmd, master_pw, (size_t)cmd_len);
+      if (plain_cmd_len == 0) {
         sqlite3_finalize(stmt);
         sqlite3_close(db);
         return -1;
@@ -189,14 +235,7 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw) {
     strncpy(entry->name, col_name ? col_name : "", MAX_NAME_LEN - 1);
     entry->name[MAX_NAME_LEN - 1] = '\0';
 
-    const char *col_login =
-        (const char *)sqlite3_column_text(stmt, 2);
-    strncpy(entry->login, col_login ? col_login : "", MAX_LOGIN_LEN - 1);
-    entry->login[MAX_NAME_LEN - 1] = '\0';
-
-    const char *col_cmd = (const char *)sqlite3_column_text(stmt, 3);
-    if (strlen(col_cmd) > 0) {
-      strncpy(entry->cmd, col_cmd ? col_cmd : "", MAX_CMD_LEN - 1);
+    if (strlen(entry->cmd) > 0) {
       
       replace_in_string(entry->cmd, SEARCH_VALUE_LOGIN, entry->login,
                         strlen(entry->login));
@@ -205,7 +244,7 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw) {
                         strlen(entry->pw));
       char totp_str[20] = {0};
       sprintf(totp_str, "%06llu", entry->totp_code);
-      replace_in_string(entry->cmd, SEARCH_VALUE_TOTP_SEED, totp_str,
+      replace_in_string(entry->cmd, SEARCH_VALUE_TOTP, totp_str,
                         strlen(totp_str));
   
       entry->cmd[MAX_CMD_LEN - 1] = '\0';

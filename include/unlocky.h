@@ -34,7 +34,7 @@ static const subcmd_entry_t SUBCMD_TABLE[] = {
 #define FLAG_ALL "-a"
 
 #define MAX_NAME_LEN 50
-#define MAX_LOGIN_LEN 50
+#define MAX_LOGIN_LEN 100
 #define MAX_PW_LEN 100
 #define MAX_CMD_LEN 512
 
@@ -42,7 +42,7 @@ static const subcmd_entry_t SUBCMD_TABLE[] = {
 
 #define SEARCH_VALUE_LOGIN "%login%"
 #define SEARCH_VALUE_PASSWORD "%password%"
-#define SEARCH_VALUE_TOTP_SEED "%totp%"
+#define SEARCH_VALUE_TOTP "%totp%"
 // #define SEARCH_VALUE_TOTP_VALUE "%totp_value%"
 
 typedef struct {
