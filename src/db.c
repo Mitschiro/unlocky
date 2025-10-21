@@ -388,6 +388,97 @@ int delete_entry(const char *name, const char *master_pw) {
   return 0;
 }
 
+int modify_entry(data_entry_t *entry, const char *master_pw) {
+  if (entry == NULL || master_pw == NULL || strlen(master_pw) == 0 || strlen(entry->name) == 0) {
+    fprintf(stderr, "Missing or invalid parameters.\n");
+    return -1;
+  }
+
+  sqlite3 *db = NULL;
+  int rc = sqlite3_open(DB_PATH, &db);
+  if (rc != SQLITE_OK) {
+    fprintf(stderr, "Failed to open DB.\n");
+    if (db) {
+      sqlite3_close(db);
+    }
+    return -1;
+  }
+
+  sqlite3_stmt *stmt = NULL;
+  const char *sql_get = "SELECT name, password, login, cmd, totp_seed, updated_at FROM unlocky WHERE name = ?;";
+  rc = sqlite3_prepare_v2(db, sql_get, -1, &stmt, NULL);
+  if (rc != SQLITE_OK) {
+    fprintf(stderr, "Sqlite stmt prep failed.\n");
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return -1;
+  }
+  sqlite3_bind_text(stmt, 1, entry->name, -1, SQLITE_STATIC);
+  printf("Before decrypt\n");
+  if (sqlite3_step(stmt) == SQLITE_ROW) {
+    const unsigned char *pw_blob = sqlite3_column_blob(stmt, 1);
+    int pw_len = sqlite3_column_bytes(stmt, 1);
+    printf("Got pw blob\n");
+    char tmp_pw[MAX_PW_LEN] = {0};
+    if (pw_blob && pw_len > 0) {
+      memcpy(tmp_pw, pw_blob, pw_len < MAX_PW_LEN ? pw_len : MAX_PW_LEN - 1);
+      entry->pw[MAX_PW_LEN - 1] = '\0';
+      printf("After memcpy: %s\n", tmp_pw);
+      unsigned long long plain_pw_len = decrypt_value(tmp_pw, master_pw, (size_t)pw_len);
+      
+      printf("After decrypt\n");
+      if (plain_pw_len == 0) {
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        return -1;
+      }
+    } 
+  }
+  bool login = strlen(entry->login) > 0;
+  bool password = strlen(entry->pw) > 0;
+  bool cmd = strlen(entry->cmd) > 0;
+  bool totp = strlen(entry->totp_seed) > 0;
+  int login_pos = 1;
+  int password_pos = 1;
+  int cmd_pos = 1;
+  int totp_pos = 1;
+  printf("Before sql\n");
+  char sql_update[100] = {0};
+  strcat(sql_update, "UPDATE unlocky SET");
+  int steps = 0;
+  if (login) {
+    strcat(sql_update, " login = ?,");
+    steps += 1;
+    password_pos += 1;
+    cmd_pos += 1;
+    totp_pos += 1;
+  }
+  if (password) {
+    strcat(sql_update, " password = ?,");
+    steps += 1;
+    cmd_pos += 1;
+    totp_pos += 1;
+  }
+  if (cmd) {
+    strcat(sql_update, " cmd = ?,");
+    steps += 1;
+    totp_pos += 1;
+  }
+  if (totp) {
+    strcat(sql_update, " totp_seed = ?");
+    steps += 1;
+  }
+  if (steps > 0) {
+    strcat(sql_update, " WHERE name = ?;");
+    char *tr = strrchr(sql_update, ',');
+    memmove(tr, tr + 1, strlen(tr ));
+    printf("SQL:-> %s\n", sql_update);
+  }
+  sqlite3_finalize(stmt);
+  sqlite3_close(db);
+  return 0;
+}
+
 int list_callback(void *data, int argc, char **argv, char **col_name) {
   (void)data;
   for (int i = 0; i < argc; i++) {

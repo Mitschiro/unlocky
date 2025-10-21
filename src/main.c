@@ -113,10 +113,51 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "No master pw provided, aborting");
         return -1;
       }
+      printf("Arguments: %d\n", argc);
+      if (argv[2][0] == '-') {
+        fprintf(stderr, "First argument after 'modify' has to be the name of the entry to be updated.\n");
+        return -1;
+      }
+
+      if (argc < 3) {
+        fprintf(stderr, "No flag+param provided for update.\n");
+      }
+
+      data_entry_t update_entry = {0};
+      strncpy(update_entry.name, argv[2], MAX_NAME_LEN - 1);
+      for (int i = 3; i < argc;) {
+        printf("Arg: %d - %s\n", i, argv[i]);
+        if (argv[i][0] == '-' && argv[i + 1][0] != '-') {
+          if (strcmp(argv[i], FLAG_LOGIN) == 0) {
+            strncpy(update_entry.login, argv[i + 1], MAX_LOGIN_LEN - 1);
+            i += 2;
+          } else if (strcmp(argv[i], FLAG_PW) == 0) {
+            strncpy(update_entry.pw, argv[i + 1], MAX_PW_LEN - 1);
+            i += 2;
+            flag_check += 1;
+          } else if (strcmp(argv[i], FLAG_CMD) == 0) {
+            strncpy(update_entry.cmd, argv[i + 1], MAX_CMD_LEN - 1);
+            i += 2;
+          } else if (strcmp(argv[i], FLAG_TOTP) == 0) {
+            strncpy(update_entry.totp_seed, argv[i + 1], MAX_PW_LEN - 1);
+            i += 2;
+          } else {
+            i += 1;
+          }
+        } else {
+          i++;
+        }
+      }
+
+      modify_entry(&update_entry, master_pw);
       break;
     case SUBCMD_DELETE:
       if (getMasterPw(master_pw) != 0) {
         fprintf(stderr, "No master pw provided, aborting");
+        return -1;
+      }
+      if (argv[2][0] == '-') {
+        fprintf(stderr, "First argument after 'delete' has to be the name of the entry to be deleted.\n");
         return -1;
       }
       delete_entry(argv[2], master_pw);
