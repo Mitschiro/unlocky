@@ -12,8 +12,7 @@
 int list_callback(void*,int,char**,char**);
 
 static const char *CREATE_SQL_TABLE = "CREATE TABLE IF NOT EXISTS unlocky ("
-                                      "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                                      "name TEXT UNIQUE NOT NULL, "
+                                      "name TEXT PRIMARY KEY UNIQUE NOT NULL, "
                                       "login BLOB, "
                                       "password BLOB NOT NULL, "
                                       "cmd BLOB, "
