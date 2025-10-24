@@ -31,6 +31,8 @@ static const subcmd_entry_t SUBCMD_TABLE[] = {
 #define FLAG_PW "-p"
 #define FLAG_CMD "-c"
 #define FLAG_TOTP "-o"
+#define FLAG_TOTP_HASH "-oh"
+#define FLAG_TOTP_DIGIT "-od"
 #define FLAG_ALL "-a"
 
 #define MAX_NAME_LEN 50
@@ -40,10 +42,14 @@ static const subcmd_entry_t SUBCMD_TABLE[] = {
 
 #define VERSION 1
 
+#define TOTP_HASH_DEFAULT 1
+#define TOTP_HASH_SHA256 256
+#define TOTP_DIGITS_DEFAULT 6
+#define TOTP_DIGITS_8 8
+
 #define SEARCH_VALUE_LOGIN "%login%"
 #define SEARCH_VALUE_PASSWORD "%password%"
 #define SEARCH_VALUE_TOTP "%totp%"
-// #define SEARCH_VALUE_TOTP_VALUE "%totp_value%"
 
 typedef struct {
   char name[MAX_NAME_LEN];
@@ -53,6 +59,8 @@ typedef struct {
   char created_at[20];
   char updated_at[20];
   char totp_seed[MAX_PW_LEN];
+  int totp_hash: TOTP_HASH_DEFAULT;
+  int totp_digit: TOTP_DIGITS_DEFAULT;
   unsigned long long totp_code;
   int totp_time;
 } data_entry_t;

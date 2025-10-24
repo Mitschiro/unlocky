@@ -19,6 +19,8 @@ static const char *CREATE_SQL_TABLE = "CREATE TABLE IF NOT EXISTS unlocky ("
                                       "created_at DATE, "
                                       "updated_at DATE, "
                                       "totp_seed BLOB, "
+                                      "totp_hash INT, "
+                                      "totp_digit INT, "
                                       "version INTEGER"
                                       ");";
 

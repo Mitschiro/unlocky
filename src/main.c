@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include "crypto.h"
+
 int getMasterPw(char *master_pw);
 
 int main(int argc, char *argv[]) {
@@ -10,6 +12,13 @@ int main(int argc, char *argv[]) {
     printf("No command has been invoked.\n");
     return 0;
   }
+
+  sha1_state s;
+  sha1_init(&s);
+  const unsigned char block[64] = {0};  // Dummy full block
+  sha1_compress(s.h, block);
+  printf("h[0] after compress = 0x%08x (changed from H0)\n", s.h[0]);  // Not 0x67452301 (mixed)
+  return 0;
 
   char *subcmd_str = argv[1];
   subcmd_t subcmd = SUBCMD_INVALID;
