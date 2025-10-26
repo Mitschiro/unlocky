@@ -1,6 +1,8 @@
 #include "db.h"
 #include "unlocky.h"
+#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include "crypto.h"
@@ -13,12 +15,18 @@ int main(int argc, char *argv[]) {
     return 0;
   }
 
-  sha1_state s;
-  sha1_init(&s);
-  const unsigned char block[64] = {0};  // Dummy full block
-  sha1_compress(s.h, block);
-  printf("h[0] after compress = 0x%08x (changed from H0)\n", s.h[0]);  // Not 0x67452301 (mixed)
-  return 0;
+  // sha1_state s;
+  // sha1_init(&s);
+  // const unsigned char input[] = "abc";
+  // sha1_update(&s, input, 3);
+  // unsigned char digest[20];
+  // sha1_final(&s, digest);
+  // printf("Digest (hex): ");
+  // for (int j = 0; j < 20; j++) {
+  //   printf("%02x", digest[j]);
+  // }
+  // printf("\n");  // da39a3ee5e6b4b0d3255bfef95601890afd80709
+  // return 0;
 
   char *subcmd_str = argv[1];
   subcmd_t subcmd = SUBCMD_INVALID;
@@ -64,13 +72,24 @@ int main(int argc, char *argv[]) {
             strncpy(entry.pw, argv[i + 1], MAX_PW_LEN - 1);
             i += 2;
             flag_check += 1;
-          } else if (strcmp(argv[i], FLAG_CMD) == 0) {
+          } else if (strcmp(argv[i], FLAG_SECRET) == 0) {
+            strncpy(entry.secret, argv[i + 1], MAX_SECRET_LEN - 1);
+            i += 2;
+          }else if (strcmp(argv[i], FLAG_CMD) == 0) {
             strncpy(entry.cmd, argv[i + 1], MAX_CMD_LEN - 1);
             i += 2;
           } else if (strcmp(argv[i], FLAG_TOTP) == 0) {
             strncpy(entry.totp_seed, argv[i + 1], MAX_PW_LEN - 1);
+            entry.totp_hash = TOTP_HASH_DEFAULT;
+            entry.totp_digit = TOTP_DIGITS_DEFAULT;
             i += 2;
-          } else {
+          } else if(strcmp(argv[i], FLAG_TOTP_HASH)) {
+            entry.totp_hash = atoi(argv[i + 1]) == TOTP_HASH_SHA256 ? TOTP_HASH_SHA256 : TOTP_HASH_DEFAULT;
+            i += 2;
+          } else if(strcmp(argv[i], FLAG_TOTP_DIGIT)) {
+            entry.totp_digit = atoi(argv[i + 1]) == TOTP_DIGITS_8 ? TOTP_DIGITS_8 : TOTP_DIGITS_DEFAULT;
+            i += 2;
+          }else {
             i += 1;
           }
         } else {
@@ -82,9 +101,6 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Name (-n) and Password (-p) are mandatory!\n");
         return -1;
       }
-
-      printf("ADD: -n %s -l %s -p %s -c %s -o %s\n", entry.name, entry.login,
-            entry.pw, entry.cmd, entry.totp_seed);
 
       time_t now = time(NULL);
       struct tm *tm_info = localtime(&now);
@@ -109,11 +125,11 @@ int main(int argc, char *argv[]) {
       data_entry_t get_entry_d = {0};
       
       if (get_entry(argv[2], &get_entry_d, master_pw) == 0) {
-        printf("- Name: %s\n- Login: %s\n- Password: %s\n- Command: %s\n- created_at: %s\n- "
-              "updated_at: %s\n- totp_seed: %s\n- totp_code: %06llu with %d seconds left\n",
-              get_entry_d.name, get_entry_d.login, get_entry_d.pw, get_entry_d.cmd,
+        printf("- Name: %s\n- Login: %s\n- Password: %s\n- Secret: %s\n- Command: %s\n- created_at: %s\n- "
+              "updated_at: %s\n- totp_seed: %s\n- totp_code: %06llu with %d seconds left\n- TOTP Config: SHA=%d, Digits=%d\n",
+              get_entry_d.name, get_entry_d.login, get_entry_d.pw, get_entry_d.secret, get_entry_d.cmd,
               get_entry_d.created_at, get_entry_d.updated_at,
-              get_entry_d.totp_seed, get_entry_d.totp_code, get_entry_d.totp_time);
+              get_entry_d.totp_seed, get_entry_d.totp_code, get_entry_d.totp_time, get_entry_d.totp_hash, get_entry_d.totp_digit);
       }
       break;
     case SUBCMD_MODIFY:
@@ -142,13 +158,22 @@ int main(int argc, char *argv[]) {
             strncpy(update_entry.pw, argv[i + 1], MAX_PW_LEN - 1);
             i += 2;
             flag_check += 1;
-          } else if (strcmp(argv[i], FLAG_CMD) == 0) {
+          } else if (strcmp(argv[i], FLAG_SECRET) == 0) {
+            strncpy(update_entry.secret, argv[i + 1], MAX_SECRET_LEN - 1);
+            i += 2;
+          }else if (strcmp(argv[i], FLAG_CMD) == 0) {
             strncpy(update_entry.cmd, argv[i + 1], MAX_CMD_LEN - 1);
             i += 2;
           } else if (strcmp(argv[i], FLAG_TOTP) == 0) {
             strncpy(update_entry.totp_seed, argv[i + 1], MAX_PW_LEN - 1);
             i += 2;
-          } else {
+          } else if (strcmp(argv[i], FLAG_TOTP_HASH) == 0) {
+            update_entry.totp_hash = atoi(argv[i + 1]) == TOTP_HASH_SHA256 ? TOTP_HASH_SHA256 : TOTP_HASH_DEFAULT;
+            i += 2;
+          }else if (strcmp(argv[i], FLAG_TOTP_DIGIT) == 0) {
+            update_entry.totp_hash = atoi(argv[i + 1]) == TOTP_DIGITS_8 ? TOTP_DIGITS_8 : TOTP_DIGITS_DEFAULT;
+            i += 2;
+          }else {
             i += 1;
           }
         } else {

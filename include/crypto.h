@@ -26,6 +26,11 @@ void sha1_update(sha1_state *state, const unsigned char *input, size_t input_len
 // Final: Pad last block, compute digest, copy to output (20 bytes)
 void sha1_final(sha1_state *state, unsigned char *output);
 
+void hmac_sha1(const unsigned char *key, size_t key_len, const unsigned char *msg, size_t msg_len, unsigned char *output);
+
+// Base32 decode (string to raw bytes, TOTP seed standard)
+int crypto_decode_base32(unsigned char *output, size_t *output_len, const unsigned char *input, size_t input_len);
+
 // Constants from RFC 3174 (Section 5: Initial Hash Values and K Words)
 // H init: 5 32-bit words (hex from spec, little-endian byte order in memory)
 #define H0 0x67452301  // Initial hash word 0 (first 32 bits of digest)

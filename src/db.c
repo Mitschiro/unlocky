@@ -15,12 +15,13 @@ static const char *CREATE_SQL_TABLE = "CREATE TABLE IF NOT EXISTS unlocky ("
                                       "name TEXT PRIMARY KEY UNIQUE NOT NULL, "
                                       "login BLOB, "
                                       "password BLOB NOT NULL, "
+                                      "secret BLOB, "
                                       "cmd BLOB, "
-                                      "created_at DATE, "
-                                      "updated_at DATE, "
                                       "totp_seed BLOB, "
                                       "totp_hash INT, "
                                       "totp_digit INT, "
+                                      "created_at DATE, "
+                                      "updated_at DATE, "
                                       "version INTEGER"
                                       ");";
 
@@ -73,6 +74,16 @@ int add_entry(data_entry_t *entry, const char *master_pw) {
     return -1;
   }
 
+  unsigned long long secret_cipher_len = 0;
+  if (strlen(entry->secret) > 0) {
+    secret_cipher_len = encrypt_value(entry->secret, master_pw);
+    printf("Secret encrypt len %llu", secret_cipher_len);
+    if (secret_cipher_len == 0) {
+      fprintf(stderr, "Secret encryption failed.\n");
+      return -1;
+    }
+  }
+
   unsigned long long totp_cipher_len = 0;
   if (strlen(entry->totp_seed) > 0) {
     totp_cipher_len = encrypt_value(entry->totp_seed, master_pw);
@@ -102,8 +113,8 @@ int add_entry(data_entry_t *entry, const char *master_pw) {
 
   sqlite3_stmt *stmt = NULL;
   const char *sql =
-      "INSERT INTO unlocky (name, login, password, cmd, created_at, "
-      "updated_at, totp_seed, version) Values (?, ?, ?, ?, ?, ?, ?, ?);";
+      "INSERT INTO unlocky (name, login, password, secret, cmd, totp_seed, totp_hash, totp_digit,"
+      " created_at, updated_at, version) Values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
   rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
   if (rc != SQLITE_OK) {
     fprintf(stderr, "SQL prepare failed: %s.\n", sqlite3_errmsg(db));
@@ -115,11 +126,14 @@ int add_entry(data_entry_t *entry, const char *master_pw) {
   sqlite3_bind_text(stmt, 1, entry->name, -1, SQLITE_STATIC);
   sqlite3_bind_blob(stmt, 2, entry->login, login_cipher_len, SQLITE_STATIC);
   sqlite3_bind_blob(stmt, 3, entry->pw, pw_cipher_len, SQLITE_STATIC);
-  sqlite3_bind_blob(stmt, 4, entry->cmd, cmd_cipher_len, SQLITE_STATIC);
-  sqlite3_bind_text(stmt, 5, entry->created_at, -1, SQLITE_STATIC);
-  sqlite3_bind_text(stmt, 6, entry->updated_at, -1, SQLITE_STATIC);
-  sqlite3_bind_blob(stmt, 7, entry->totp_seed, totp_cipher_len, SQLITE_STATIC);
-  sqlite3_bind_int(stmt, 8, VERSION);
+  sqlite3_bind_blob(stmt, 4, entry->secret, secret_cipher_len, SQLITE_STATIC);
+  sqlite3_bind_blob(stmt, 5, entry->cmd, cmd_cipher_len, SQLITE_STATIC);
+  sqlite3_bind_blob(stmt, 6, entry->totp_seed, totp_cipher_len, SQLITE_STATIC);
+  sqlite3_bind_int(stmt, 7, entry->totp_hash);
+  sqlite3_bind_int(stmt, 8, entry->totp_digit);
+  sqlite3_bind_text(stmt, 9, entry->created_at, -1, SQLITE_STATIC);
+  sqlite3_bind_text(stmt, 10, entry->updated_at, -1, SQLITE_STATIC);
+  sqlite3_bind_int(stmt, 11, VERSION);
 
   rc = sqlite3_step(stmt);
   if (rc != SQLITE_DONE) {
@@ -152,7 +166,7 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw) {
   }
 
   const char *sql = "SELECT name, password, login, cmd, created_at, updated_at, "
-                "totp_seed FROM unlocky WHERE name = ?;";
+                "totp_seed, totp_hash, totp_digit, secret FROM unlocky WHERE name = ?;";
   
 
   sqlite3_stmt *stmt = NULL;
@@ -178,6 +192,20 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw) {
 
       unsigned long long plain_pw_len = decrypt_value(entry->pw, master_pw, (size_t)pw_len);
       if (plain_pw_len == 0) {
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        return -1;
+      }
+    }
+
+    const unsigned char *secret_blob = sqlite3_column_blob(stmt, 9);
+    int secret_len = sqlite3_column_bytes(stmt, 9);
+    if (secret_blob && secret_len > 0) {
+      memcpy(entry->secret, secret_blob, secret_len < MAX_SECRET_LEN ? secret_len : MAX_SECRET_LEN - 1);
+      entry->secret[MAX_SECRET_LEN - 1] = '\0';
+
+      unsigned long long plain_secret_len = decrypt_value(entry->secret, master_pw, (size_t)secret_len);
+      if (plain_secret_len == 0) {
         sqlite3_finalize(stmt);
         sqlite3_close(db);
         return -1;
@@ -214,6 +242,8 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw) {
 
     const unsigned char *totp_blob = sqlite3_column_blob(stmt, 6);
     int totp_len = sqlite3_column_bytes(stmt, 6);
+    int totp_hash = sqlite3_column_int(stmt, 7);
+    int totp_digit = sqlite3_column_int(stmt, 8);
     if (totp_blob && totp_len > 0) {
       memcpy(entry->totp_seed, totp_blob,
              totp_len < MAX_PW_LEN ? totp_len : MAX_PW_LEN - 1);
@@ -221,10 +251,11 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw) {
       unsigned long long plain_totp_len =
           decrypt_value(entry->totp_seed, master_pw, (size_t)totp_len);
 
-      if (generate_totp(entry->totp_seed, &entry->totp_code, &entry->totp_time) != 0) {
+      if (generate_totp(entry->totp_seed, &entry->totp_code, &entry->totp_time, entry->totp_hash, entry->totp_digit) != 0) {
         fprintf(stderr, "TOTP generation failed.\n");
       }
-
+      entry->totp_hash = totp_hash;
+      entry->totp_digit = totp_digit;
       if (plain_totp_len == 0) {
         sqlite3_finalize(stmt);
         sqlite3_close(db);
@@ -243,6 +274,8 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw) {
   
       replace_in_string(entry->cmd, SEARCH_VALUE_PASSWORD, entry->pw,
                         strlen(entry->pw));
+      replace_in_string(entry->cmd, SEARCH_VALUE_SECRET, entry->secret,
+                        strlen(entry->secret));
       char totp_str[20] = {0};
       sprintf(totp_str, "%06llu", entry->totp_code);
       replace_in_string(entry->cmd, SEARCH_VALUE_TOTP, totp_str,
@@ -365,6 +398,7 @@ int delete_entry(const char *name, const char *master_pw) {
         return -1;
       }
     }
+
   }else {
     return -1;
   }
@@ -423,7 +457,7 @@ int modify_entry(data_entry_t *entry, const char *master_pw) {
     char tmp_pw[MAX_PW_LEN] = {0};
     if (pw_blob && pw_len > 0) {
       memcpy(tmp_pw, pw_blob, pw_len < MAX_PW_LEN ? pw_len : MAX_PW_LEN - 1);
-      entry->pw[MAX_PW_LEN - 1] = '\0';
+      // entry->pw[MAX_PW_LEN - 1] = '\0';
       unsigned long long plain_pw_len = decrypt_value(tmp_pw, master_pw, (size_t)pw_len);
       
       if (plain_pw_len == 0) {
@@ -435,11 +469,13 @@ int modify_entry(data_entry_t *entry, const char *master_pw) {
   }
   bool login = strlen(entry->login) > 0;
   bool password = strlen(entry->pw) > 0;
+  bool secret = strlen(entry->secret) > 0;
   bool cmd = strlen(entry->cmd) > 0;
   bool totp = strlen(entry->totp_seed) > 0;
   int name_pos = 2;
   int login_pos = 2;
   int password_pos = 2;
+  int secret_pos = 2;
   int cmd_pos = 2;
   int totp_pos = 2;
 
@@ -450,6 +486,7 @@ int modify_entry(data_entry_t *entry, const char *master_pw) {
     strcat(sql_update, " login = ?,");
     steps += 1;
     password_pos += 1;
+    secret_pos += 1;
     cmd_pos += 1;
     totp_pos += 1;
     name_pos += 1;
@@ -457,6 +494,7 @@ int modify_entry(data_entry_t *entry, const char *master_pw) {
   if (password) {
     strcat(sql_update, " password = ?,");
     steps += 1;
+    secret_pos += 1;
     cmd_pos += 1;
     totp_pos += 1;
     name_pos += 1;
@@ -464,11 +502,18 @@ int modify_entry(data_entry_t *entry, const char *master_pw) {
   if (cmd) {
     strcat(sql_update, " cmd = ?,");
     steps += 1;
+    secret_pos += 1;
     totp_pos += 1;
     name_pos += 1;
   }
   if (totp) {
     strcat(sql_update, " totp_seed = ?,");
+    steps += 1;
+    secret_pos += 1;
+    name_pos += 1;
+  }
+  if (secret) {
+    strcat(sql_update, " secret = ?,");
     steps += 1;
     name_pos += 1;
   }
@@ -510,6 +555,15 @@ int modify_entry(data_entry_t *entry, const char *master_pw) {
         return -1;
       }
       sqlite3_bind_blob(stmt, password_pos, entry->pw, password_cipher_len, SQLITE_STATIC);
+    }
+    if (secret) {
+      unsigned long long secret_cipher_len = 0;
+      secret_cipher_len = encrypt_value(entry->secret, master_pw);
+      if (secret_cipher_len == 0) {
+        fprintf(stderr, "Password encryption failed.\n");
+        return -1;
+      }
+      sqlite3_bind_blob(stmt, secret_pos, entry->secret, secret_cipher_len, SQLITE_STATIC);
     }
     if (cmd) {
       unsigned long long cmd_cipher_len = 0;
