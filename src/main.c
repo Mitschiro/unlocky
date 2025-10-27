@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include "crypto.h"
 
 int getMasterPw(char *master_pw);
 
@@ -14,19 +13,6 @@ int main(int argc, char *argv[]) {
     printf("No command has been invoked.\n");
     return 0;
   }
-
-  // sha1_state s;
-  // sha1_init(&s);
-  // const unsigned char input[] = "abc";
-  // sha1_update(&s, input, 3);
-  // unsigned char digest[20];
-  // sha1_final(&s, digest);
-  // printf("Digest (hex): ");
-  // for (int j = 0; j < 20; j++) {
-  //   printf("%02x", digest[j]);
-  // }
-  // printf("\n");  // da39a3ee5e6b4b0d3255bfef95601890afd80709
-  // return 0;
 
   char *subcmd_str = argv[1];
   subcmd_t subcmd = SUBCMD_INVALID;

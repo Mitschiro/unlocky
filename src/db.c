@@ -253,6 +253,7 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw) {
 
       if (generate_totp(entry->totp_seed, &entry->totp_code, &entry->totp_time, entry->totp_hash, entry->totp_digit) != 0) {
         fprintf(stderr, "TOTP generation failed.\n");
+        return -1;
       }
       entry->totp_hash = totp_hash;
       entry->totp_digit = totp_digit;

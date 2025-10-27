@@ -1,6 +1,7 @@
-#include "crypto.h"
+#include "sha1.h"
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 uint32_t rotl(uint32_t x, int n) {
@@ -44,7 +45,7 @@ void sha1_compress(uint32_t *h, const unsigned char *block) {
   }
   for (; i < 80; i++) {
     uint32_t temp = w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16];
-    w[i] = rotl(temp, ROTL_W);  // ROTL_W = 1
+    w[i] = rotl(temp, ROTL_W);
   }
 
   for (i = 0; i < 80; i++) {
@@ -157,17 +158,16 @@ void sha1_final(sha1_state *state, unsigned char *output) {
 }
 
 int sha1_hash(const unsigned char *input, size_t input_len, unsigned char *output) {
-  // Guard against bad pointers or empty input
   if (input == NULL || output == NULL || input_len == 0) {
-    return -1;  // Err—caller check rc == 0
+    return -1;
   }
 
   sha1_state state;
-  sha1_init(&state);  // Set initial state
+  sha1_init(&state);
 
-  sha1_update(&state, input, input_len);  // Process input bytes
+  sha1_update(&state, input, input_len);
 
-  sha1_final(&state, output);  // Pad, hash last block, copy digest
+  sha1_final(&state, output);
 
   return 0;  // Success
 }

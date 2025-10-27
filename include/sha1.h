@@ -27,7 +27,7 @@ void sha1_update(sha1_state *state, const unsigned char *input, size_t input_len
 void sha1_final(sha1_state *state, unsigned char *output);
 
 void hmac_sha1(const unsigned char *key, size_t key_len, const unsigned char *msg, size_t msg_len, unsigned char *output);
-
+#define MAX_OUTPUT_SIZE 1048576
 // Base32 decode (string to raw bytes, TOTP seed standard)
 int crypto_decode_base32(unsigned char *output, size_t *output_len, const unsigned char *input, size_t input_len);
 
@@ -44,12 +44,6 @@ int crypto_decode_base32(unsigned char *output, size_t *output_len, const unsign
 #define K2 0x6ed9eba1  // Round 2 (20-39): +6ed9eba1
 #define K3 0x8f1bbcdc  // Round 3 (40-59): +8f1bbcdc
 #define K4 0xca62c1d6  // Round 4 (60-79): +ca62c1d6
-
-// Rotation constants (Section 6: left rotate by n bits, for word mixing)
-// #define ROT0 7  // Round 1 f func: ROTL(w[i-3] ^ w[i-8] ^ w[i-14] ^ w[i-16], 1) + K1 + h
-// #define ROT1 5  // Round 2: ROTL(w[i-3] ^ w[i-8] ^ w[i-14] ^ w[i-16], 1) + K2 + h
-// #define ROT2 3  // Round 3: Same ROTL + K3
-// #define ROT3 7  // Round 4: Same ROTL + K4
 
 #define ROTL_B 5
 #define ROTL_W 1

@@ -1,5 +1,6 @@
 #include "tools.h"
-#include "crypto.h"
+#include "base32.h"
+#include "sha1.h"
 #include "unlocky.h"
 #include <sodium/crypto_auth_hmacsha256.h>
 #include <stddef.h>
@@ -33,11 +34,8 @@ int generate_totp(const char *seed, unsigned long long *totp_code,
   }
 
   // Decode base32 seed to raw key bytes (TOTP standard, RFC 6030)
-  unsigned char key[20];  // Room for decode (max 16 chars base32 = 10 bytes)
-  size_t key_len;
-  if (crypto_decode_base32(key, &key_len, (const unsigned char *)seed, strlen(seed)) != 0) {
-    return -1;  // Invalid base32
-  }
+  unsigned char key[20] = {0};  // Room for decode (max 16 chars base32 = 10 bytes)
+  base32_decode((unsigned char*)seed, key);
 
   // get current counter
   time_t now = time(NULL);
@@ -69,11 +67,7 @@ int generate_totp(const char *seed, unsigned long long *totp_code,
       break;
     case TOTP_HASH_DEFAULT:
     default:
-      // sha1_state state_sha1;
-      // sha1_init(&state_sha1);
-      // sha1_update(&state_sha1, (unsigned char*)seed, strlen(seed));
-      // sha1_final(&state_sha1, hash);
-      hmac_sha1((unsigned char *)seed, strlen(seed), counter_bytes, 8, hash);  // HMAC-SHA1 (key=seed, msg=counter)
+      hmac_sha1((unsigned char *)key, strlen((const char*)key), counter_bytes, 8, hash);  // HMAC-SHA1 (key=seed, msg=counter)
       break;
   }
 
