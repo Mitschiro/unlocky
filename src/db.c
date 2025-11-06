@@ -18,8 +18,9 @@ static const char *CREATE_SQL_TABLE = "CREATE TABLE IF NOT EXISTS unlocky ("
                                       "secret BLOB, "
                                       "cmd BLOB, "
                                       "totp_seed BLOB, "
-                                      "totp_hash INT, "
-                                      "totp_digit INT, "
+                                      "totp_hash INT NOT NULL, "
+                                      "totp_digit INT NOT NULL, "
+                                      "totp_base32 INT NOT NULL, "
                                       "created_at DATE, "
                                       "updated_at DATE, "
                                       "version INTEGER"
@@ -113,8 +114,8 @@ int add_entry(data_entry_t *entry, const char *master_pw) {
 
   sqlite3_stmt *stmt = NULL;
   const char *sql =
-      "INSERT INTO unlocky (name, login, password, secret, cmd, totp_seed, totp_hash, totp_digit,"
-      " created_at, updated_at, version) Values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
+      "INSERT INTO unlocky (name, login, password, secret, cmd, totp_seed, totp_hash, totp_digit, totp_base32,"
+      " created_at, updated_at, version) Values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
   rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
   if (rc != SQLITE_OK) {
     fprintf(stderr, "SQL prepare failed: %s.\n", sqlite3_errmsg(db));
@@ -131,9 +132,10 @@ int add_entry(data_entry_t *entry, const char *master_pw) {
   sqlite3_bind_blob(stmt, 6, entry->totp_seed, totp_cipher_len, SQLITE_STATIC);
   sqlite3_bind_int(stmt, 7, entry->totp_hash);
   sqlite3_bind_int(stmt, 8, entry->totp_digit);
-  sqlite3_bind_text(stmt, 9, entry->created_at, -1, SQLITE_STATIC);
-  sqlite3_bind_text(stmt, 10, entry->updated_at, -1, SQLITE_STATIC);
-  sqlite3_bind_int(stmt, 11, VERSION);
+  sqlite3_bind_int(stmt, 9, entry->totp_base32);
+  sqlite3_bind_text(stmt, 10, entry->created_at, -1, SQLITE_STATIC);
+  sqlite3_bind_text(stmt, 11, entry->updated_at, -1, SQLITE_STATIC);
+  sqlite3_bind_int(stmt, 12, VERSION);
 
   rc = sqlite3_step(stmt);
   if (rc != SQLITE_DONE) {
@@ -166,7 +168,7 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw) {
   }
 
   const char *sql = "SELECT name, password, login, cmd, created_at, updated_at, "
-                "totp_seed, totp_hash, totp_digit, secret FROM unlocky WHERE name = ?;";
+                "totp_seed, totp_hash, totp_digit, totp_base32, secret FROM unlocky WHERE name = ?;";
   
 
   sqlite3_stmt *stmt = NULL;
@@ -198,8 +200,8 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw) {
       }
     }
 
-    const unsigned char *secret_blob = sqlite3_column_blob(stmt, 9);
-    int secret_len = sqlite3_column_bytes(stmt, 9);
+    const unsigned char *secret_blob = sqlite3_column_blob(stmt, 10);
+    int secret_len = sqlite3_column_bytes(stmt, 10);
     if (secret_blob && secret_len > 0) {
       memcpy(entry->secret, secret_blob, secret_len < MAX_SECRET_LEN ? secret_len : MAX_SECRET_LEN - 1);
       entry->secret[MAX_SECRET_LEN - 1] = '\0';
@@ -244,19 +246,22 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw) {
     int totp_len = sqlite3_column_bytes(stmt, 6);
     int totp_hash = sqlite3_column_int(stmt, 7);
     int totp_digit = sqlite3_column_int(stmt, 8);
+    int totp_base32 = sqlite3_column_int(stmt, 9);
     if (totp_blob && totp_len > 0) {
+      entry->totp_hash = totp_hash;
+      entry->totp_digit = totp_digit;
+      entry->totp_base32 = totp_base32;
       memcpy(entry->totp_seed, totp_blob,
              totp_len < MAX_PW_LEN ? totp_len : MAX_PW_LEN - 1);
       entry->totp_seed[MAX_PW_LEN - 1] = '\0';
       unsigned long long plain_totp_len =
           decrypt_value(entry->totp_seed, master_pw, (size_t)totp_len);
 
-      if (generate_totp(entry->totp_seed, &entry->totp_code, &entry->totp_time, entry->totp_hash, entry->totp_digit) != 0) {
+      if (generate_totp(entry->totp_seed, &entry->totp_code, &entry->totp_time, entry->totp_hash, entry->totp_digit, entry->totp_base32) != 0) {
         fprintf(stderr, "TOTP generation failed.\n");
         return -1;
       }
-      entry->totp_hash = totp_hash;
-      entry->totp_digit = totp_digit;
+      
       if (plain_totp_len == 0) {
         sqlite3_finalize(stmt);
         sqlite3_close(db);
@@ -420,6 +425,14 @@ int delete_entry(const char *name, const char *master_pw) {
     printf("Sucessfully deleted entry.\n");
   }
 
+  // Vacuum to reclaim space (defrag after delete, no pw blob fragments)
+  char *err_msg = NULL;
+  rc = sqlite3_exec(db, "PRAGMA vacuum;", NULL, NULL, &err_msg);
+  if (rc != SQLITE_OK) {
+    fprintf(stderr, "Vacuum failed: %s\n", err_msg);
+    sqlite3_free(err_msg);
+  }
+
   sqlite3_close(db);
   return 0;
 }
@@ -441,7 +454,7 @@ int modify_entry(data_entry_t *entry, const char *master_pw) {
   }
 
   sqlite3_stmt *stmt = NULL;
-  const char *sql_get = "SELECT name, password, login, cmd, totp_seed, updated_at FROM unlocky WHERE name = ?;";
+  const char *sql_get = "SELECT name, password FROM unlocky WHERE name = ?;";
   rc = sqlite3_prepare_v2(db, sql_get, -1, &stmt, NULL);
   if (rc != SQLITE_OK) {
     fprintf(stderr, "Sqlite stmt prep failed.\n");
@@ -466,19 +479,26 @@ int modify_entry(data_entry_t *entry, const char *master_pw) {
         sqlite3_close(db);
         return -1;
       }
-    } 
+    }
   }
+
   bool login = strlen(entry->login) > 0;
   bool password = strlen(entry->pw) > 0;
   bool secret = strlen(entry->secret) > 0;
   bool cmd = strlen(entry->cmd) > 0;
   bool totp = strlen(entry->totp_seed) > 0;
+  bool totp_hash = entry->totp_hash == TOTP_HASH_DEFAULT || entry->totp_hash == TOTP_HASH_SHA256;
+  bool totp_digit = entry->totp_digit == TOTP_DIGITS_DEFAULT || entry->totp_digit == TOTP_DIGITS_8;
+  bool totp_base32 = entry->totp_base32 == TOTP_BASE32_ACTIVE || entry->totp_base32 == TOTP_BASE_INACTIVE;
   int name_pos = 2;
   int login_pos = 2;
   int password_pos = 2;
   int secret_pos = 2;
   int cmd_pos = 2;
   int totp_pos = 2;
+  int totp_hash_pos = 2;
+  int totp_digit_pos = 2;
+  int totp_base32_pos = 2;
 
   char sql_update[100] = {0};
   strcat(sql_update, "UPDATE unlocky SET updated_at = ?,");
@@ -491,6 +511,9 @@ int modify_entry(data_entry_t *entry, const char *master_pw) {
     cmd_pos += 1;
     totp_pos += 1;
     name_pos += 1;
+    totp_hash_pos += 1;
+    totp_digit_pos += 1;
+    totp_base32_pos += 1;
   }
   if (password) {
     strcat(sql_update, " password = ?,");
@@ -499,6 +522,9 @@ int modify_entry(data_entry_t *entry, const char *master_pw) {
     cmd_pos += 1;
     totp_pos += 1;
     name_pos += 1;
+    totp_hash_pos += 1;
+    totp_digit_pos += 1;
+    totp_base32_pos += 1;
   }
   if (cmd) {
     strcat(sql_update, " cmd = ?,");
@@ -506,23 +532,51 @@ int modify_entry(data_entry_t *entry, const char *master_pw) {
     secret_pos += 1;
     totp_pos += 1;
     name_pos += 1;
+    totp_hash_pos += 1;
+    totp_digit_pos += 1;
+    totp_base32_pos += 1;
   }
   if (totp) {
     strcat(sql_update, " totp_seed = ?,");
     steps += 1;
     secret_pos += 1;
     name_pos += 1;
+    totp_hash_pos += 1;
+    totp_digit_pos += 1;
+    totp_base32_pos += 1;
   }
   if (secret) {
     strcat(sql_update, " secret = ?,");
     steps += 1;
     name_pos += 1;
+    totp_hash_pos += 1;
+    totp_digit_pos += 1;
+    totp_base32_pos += 1;
   }
+  if (totp_hash) {
+    strcat(sql_update, " totp_hash = ?,");
+    totp_digit_pos += 1;
+    totp_base32_pos += 1;
+    steps += 1;
+    name_pos += 1;
+  }
+  if (totp_digit) {
+    strcat(sql_update, " totp_digit = ?,");
+    totp_base32_pos += 1;
+    steps += 1;
+    name_pos += 1;
+  }
+  if (totp_base32) {
+    strcat(sql_update, " totp_base32 = ?,");
+    steps += 1;
+    name_pos += 1;
+  }
+
+  printf("SQL: %s\n", sql_update);
   if (steps > 0) {
     strcat(sql_update, " WHERE name = ?;");
     char *tr = strrchr(sql_update, ',');
     memmove(tr, tr + 1, strlen(tr ));
-    
     rc = sqlite3_prepare_v2(db, sql_update, -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
       fprintf(stderr, "Sqlite stmt prep failed.\n");
@@ -584,6 +638,16 @@ int modify_entry(data_entry_t *entry, const char *master_pw) {
       }
       sqlite3_bind_blob(stmt, totp_pos, entry->totp_seed, totp_cipher_len, SQLITE_STATIC);
     }
+    if (totp_hash) {
+      sqlite3_bind_int(stmt, totp_hash_pos, entry->totp_hash);
+    }
+    if (totp_digit) {
+      printf("Before db: %d\n", entry->totp_digit);
+      sqlite3_bind_int(stmt, totp_digit_pos, entry->totp_digit);
+    }
+    if (totp_base32) {
+      sqlite3_bind_int(stmt, totp_base32_pos, entry->totp_base32);
+    }
 
     rc = sqlite3_step(stmt);
     if (rc != SQLITE_DONE) {
@@ -605,6 +669,41 @@ int list_callback(void *data, int argc, char **argv, char **col_name) {
   for (int i = 0; i < argc; i++) {
     printf("%s = %s%s", col_name[i], argv[i] ? argv[i] : "NULL", 
            i < argc - 1 ? " | " : "\n");
+  }
+  return 0;
+}
+
+int setup_db() {
+
+  init_db();
+  
+  sqlite3 *db = NULL;
+  int rc = sqlite3_open(DB_PATH, &db);
+  if (rc != SQLITE_OK) {
+    fprintf(stderr, "SQlite open failed: %s\n", sqlite3_errmsg(db));
+    if (db) {
+      sqlite3_close(db);
+    }
+    return -1;
+  }
+
+  // Set SQLite configs for security/performance
+  const char *configs[] = {
+    "PRAGMA secure_delete = ON;", //override deleted rows with 0s to avoid disk leaks.
+    "PRAGMA synchronous = OFF;", // faster writes
+    "PRAGMA journal_mode = MEMORY;", // exec once program, in memory is fine
+    "PRAGMA threads = 1;" // no multi-thread needed
+  };
+
+  char *err_msg = NULL;
+  for (int i = 0; i < 4; i++) {
+    rc = sqlite3_exec(db, configs[i], NULL, NULL, &err_msg);
+    if (rc != SQLITE_OK) {
+      fprintf(stderr, "Config %s failed: %s\n", configs[i], err_msg);
+      sqlite3_free(err_msg);
+      sqlite3_close(db);
+      return -1;
+    }
   }
   return 0;
 }

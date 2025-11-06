@@ -14,6 +14,11 @@ int get_entry(const char *name, data_entry_t *entry, const char *master_pw);
 int modify_entry(data_entry_t *entry, const char *master_pw);
 int delete_entry(const char *name, const char *master_pw);
 int list_entries();
+/*
+Creates the initial db file + configurations.
+Sets unlocky table up
+*/
+int setup_db();
 void close_db(void);
 
 #endif // DB_H

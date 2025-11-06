@@ -4,10 +4,17 @@
 #include <stdint.h>  // For uint32_t, uint64_t (fixed-size ints, no platform weirdness)
 #include <stddef.h>  // For size_t (lengths, like strlen return)
 
+
+// RFC 3174 implementation of sha1, as SHA1 is slowly faded out (libsodium for example) due to it's security risks,
+// i decided to implement SHA1 as TOTP still depends on it and will for a while.
+// The risk of adding another lib or switching to another lib altogether, just for SHA1 getting depreiated is too high of a risk.
+
 // High-level function: Hash input bytes to 20-byte SHA1 digest
 // Usage: unsigned char hash[20]; sha1_hash(input, input_len, hash);
 int sha1_hash(const unsigned char *input, size_t input_len, unsigned char *output);
+
 void sha1_compress(uint32_t *h, const unsigned char *block);
+
 // Internal streaming functions (for large input or incremental hash)
 // State = internal struct (80 bytes: hash words + buffer + len)
 typedef struct {
@@ -27,9 +34,7 @@ void sha1_update(sha1_state *state, const unsigned char *input, size_t input_len
 void sha1_final(sha1_state *state, unsigned char *output);
 
 void hmac_sha1(const unsigned char *key, size_t key_len, const unsigned char *msg, size_t msg_len, unsigned char *output);
-#define MAX_OUTPUT_SIZE 1048576
-// Base32 decode (string to raw bytes, TOTP seed standard)
-int crypto_decode_base32(unsigned char *output, size_t *output_len, const unsigned char *input, size_t input_len);
+
 
 // Constants from RFC 3174 (Section 5: Initial Hash Values and K Words)
 // H init: 5 32-bit words (hex from spec, little-endian byte order in memory)

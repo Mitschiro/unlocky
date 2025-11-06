@@ -27,15 +27,17 @@ int replace_in_string(char *dest_str, const char *search_val,
 }
 
 int generate_totp(const char *seed, unsigned long long *totp_code,
-                  int *seconds_left, int totp_hash, int totp_digit) {
+                  int *seconds_left, int totp_hash, int totp_digit, int totp_base32) {
   if (seed == NULL || totp_code == NULL || seconds_left == NULL ||
       strlen(seed) == 0) {
     return -1;
   }
 
-  // Decode base32 seed to raw key bytes (TOTP standard, RFC 6030)
   unsigned char key[20] = {0};  // Room for decode (max 16 chars base32 = 10 bytes)
-  base32_decode((unsigned char*)seed, key);
+  if (totp_base32 == TOTP_BASE32_ACTIVE) {
+    // Decode base32 seed to raw key bytes (TOTP standard, RFC 6030)
+    base32_decode((unsigned char*)seed, key);
+  }
 
   // get current counter
   time_t now = time(NULL);
@@ -58,9 +60,9 @@ int generate_totp(const char *seed, unsigned long long *totp_code,
   counter_bytes[7] = counter & 0xff;
 
   unsigned char hash[HMAC_SHA256_BYTES];
+  crypto_auth_hmacsha256_state state;
   switch (totp_hash) {
     case TOTP_HASH_SHA256:
-      crypto_auth_hmacsha256_state state;
       crypto_auth_hmacsha256_init(&state, (unsigned char *)seed, strlen(seed));
       crypto_auth_hmacsha256_update(&state, counter_bytes, 8);
       crypto_auth_hmacsha256_final(&state, hash);

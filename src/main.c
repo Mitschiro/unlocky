@@ -68,12 +68,16 @@ int main(int argc, char *argv[]) {
             strncpy(entry.totp_seed, argv[i + 1], MAX_PW_LEN - 1);
             entry.totp_hash = TOTP_HASH_DEFAULT;
             entry.totp_digit = TOTP_DIGITS_DEFAULT;
+            entry.totp_base32 = TOTP_BASE32_DEFAULT;
             i += 2;
           } else if(strcmp(argv[i], FLAG_TOTP_HASH)) {
             entry.totp_hash = atoi(argv[i + 1]) == TOTP_HASH_SHA256 ? TOTP_HASH_SHA256 : TOTP_HASH_DEFAULT;
             i += 2;
           } else if(strcmp(argv[i], FLAG_TOTP_DIGIT)) {
             entry.totp_digit = atoi(argv[i + 1]) == TOTP_DIGITS_8 ? TOTP_DIGITS_8 : TOTP_DIGITS_DEFAULT;
+            i += 2;
+          }else if (strcmp(argv[i], FLAG_TOTP_BASE32) == 0) {
+            entry.totp_base32 = atoi(argv[i + 1]) == TOTP_BASE_INACTIVE ? TOTP_BASE_INACTIVE : TOTP_BASE32_DEFAULT;
             i += 2;
           }else {
             i += 1;
@@ -112,10 +116,10 @@ int main(int argc, char *argv[]) {
       
       if (get_entry(argv[2], &get_entry_d, master_pw) == 0) {
         printf("- Name: %s\n- Login: %s\n- Password: %s\n- Secret: %s\n- Command: %s\n- created_at: %s\n- "
-              "updated_at: %s\n- totp_seed: %s\n- totp_code: %06llu with %d seconds left\n- TOTP Config: SHA=%d, Digits=%d\n",
+              "updated_at: %s\n- totp_seed: %s\n- totp_code: %06llu with %d seconds left\n- TOTP Config: SHA=%d, Digits=%d, Base32=%s\n",
               get_entry_d.name, get_entry_d.login, get_entry_d.pw, get_entry_d.secret, get_entry_d.cmd,
               get_entry_d.created_at, get_entry_d.updated_at,
-              get_entry_d.totp_seed, get_entry_d.totp_code, get_entry_d.totp_time, get_entry_d.totp_hash, get_entry_d.totp_digit);
+              get_entry_d.totp_seed, get_entry_d.totp_code, get_entry_d.totp_time, get_entry_d.totp_hash, get_entry_d.totp_digit, get_entry_d.totp_base32 == TOTP_BASE32_ACTIVE ? "true" : "false");
       }
       break;
     case SUBCMD_MODIFY:
@@ -157,7 +161,11 @@ int main(int argc, char *argv[]) {
             update_entry.totp_hash = atoi(argv[i + 1]) == TOTP_HASH_SHA256 ? TOTP_HASH_SHA256 : TOTP_HASH_DEFAULT;
             i += 2;
           }else if (strcmp(argv[i], FLAG_TOTP_DIGIT) == 0) {
-            update_entry.totp_hash = atoi(argv[i + 1]) == TOTP_DIGITS_8 ? TOTP_DIGITS_8 : TOTP_DIGITS_DEFAULT;
+            update_entry.totp_digit = atoi(argv[i + 1]) == TOTP_DIGITS_8 ? TOTP_DIGITS_8 : TOTP_DIGITS_DEFAULT;
+            printf("Update digit: %d\n", update_entry.totp_digit);
+            i += 2;
+          }else if (strcmp(argv[i], FLAG_TOTP_BASE32) == 0) {
+            update_entry.totp_base32 = atoi(argv[i + 1]) == TOTP_BASE_INACTIVE ? TOTP_BASE_INACTIVE : TOTP_BASE32_DEFAULT;
             i += 2;
           }else {
             i += 1;
@@ -182,6 +190,7 @@ int main(int argc, char *argv[]) {
       break;
     case SUBCMD_SETUP:
       printf("SETUP\n");
+      setup_db();
       break;
   }
 
