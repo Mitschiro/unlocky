@@ -1,12 +1,19 @@
 #include "db.h"
 #include "unlocky.h"
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
 #include <time.h>
+#include <pwd.h>
+#include <unistd.h>
+#include <sys/stat.h>
 
 int getMasterPw(char *master_pw);
+
+void setup_unlocky();
 
 int main(int argc, char *argv[]) {
   if (argc < 2) {
@@ -190,7 +197,7 @@ int main(int argc, char *argv[]) {
       break;
     case SUBCMD_SETUP:
       printf("SETUP\n");
-      setup_db();
+      setup_unlocky();
       break;
   }
 
@@ -209,4 +216,39 @@ int getMasterPw(char *master_pw) {
     return -1;
   }
   return 0;
+}
+
+void setup_unlocky() {
+  struct passwd *pw = getpwnam("unlocky");
+  uid_t unlocky_uid = 0;
+  gid_t unlocky_gid = 0;
+  if (pw == NULL) {
+    if (system("sudo useradd -r -s /bin/false unlocky") != 0) {
+      printf("Failed to set unlocky user. Try again or set the 'unlocky' user manually.\n");
+      return;
+    }
+    pw = getpwnam("unlocky");
+    if (pw == NULL) {
+      fprintf(stderr, "Something went wrong, failed to fetch user details");
+      return;
+    }
+  }
+  unlocky_uid = pw->pw_uid;
+  unlocky_gid = pw->pw_gid;
+  printf("uid: %d, gid: %d\n", pw->pw_uid, pw->pw_gid);
+  if (chown(DB_PATH, unlocky_uid, unlocky_gid) != 0) {
+    fprintf(stderr, "chmod failed: %s\n", strerror(errno));
+    return;
+  }
+
+  if (chmod(DB_PATH, S_IRUSR | S_IWUSR) != 0) {
+    fprintf(stderr, "chmod failed: %s", strerror(errno));
+    return;
+  }
+
+  if (chmod("./build/unlocky", S_IRUSR | S_IWUSR | S_IXUSR | S_IXGRP | S_IXOTH | S_ISUID) != 0) {
+    fprintf(stderr, "setuid chmod failed: %s\n", strerror(errno));
+    return;
+  }
+  return;
 }
