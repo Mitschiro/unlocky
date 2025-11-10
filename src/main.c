@@ -1,6 +1,6 @@
 #include "db.h"
 #include "unlocky.h"
-#include <errno.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,10 +10,9 @@
 #include <pwd.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <termios.h>
 
-int getMasterPw(char *master_pw);
-
-void setup_unlocky();
+int getMasterPw(char *master_pw, size_t master_pw_len);
 
 int main(int argc, char *argv[]) {
   if (argc < 2) {
@@ -31,18 +30,13 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  int db_init = init_db();
-
-  if (db_init != 0) {
-    return -1;
-  }
-  char master_pw[100] = {0};
   
+  char master_pw[100] = {0};
   switch (subcmd) {
     case SUBCMD_INVALID:
       return -1;
     case SUBCMD_ADD:
-      if (getMasterPw(master_pw) != 0) {
+      if (getMasterPw(master_pw, sizeof(master_pw)) != 0) {
         fprintf(stderr, "No master pw provided, aborting");
         return -1;
       }
@@ -77,10 +71,10 @@ int main(int argc, char *argv[]) {
             entry.totp_digit = TOTP_DIGITS_DEFAULT;
             entry.totp_base32 = TOTP_BASE32_DEFAULT;
             i += 2;
-          } else if(strcmp(argv[i], FLAG_TOTP_HASH)) {
+          } else if(strcmp(argv[i], FLAG_TOTP_HASH) == 0) {
             entry.totp_hash = atoi(argv[i + 1]) == TOTP_HASH_SHA256 ? TOTP_HASH_SHA256 : TOTP_HASH_DEFAULT;
             i += 2;
-          } else if(strcmp(argv[i], FLAG_TOTP_DIGIT)) {
+          } else if(strcmp(argv[i], FLAG_TOTP_DIGIT) == 0) {
             entry.totp_digit = atoi(argv[i + 1]) == TOTP_DIGITS_8 ? TOTP_DIGITS_8 : TOTP_DIGITS_DEFAULT;
             i += 2;
           }else if (strcmp(argv[i], FLAG_TOTP_BASE32) == 0) {
@@ -115,22 +109,31 @@ int main(int argc, char *argv[]) {
       list_entries();
       break;
     case SUBCMD_GET:
-      if (getMasterPw(master_pw) != 0) {
+      if (getMasterPw(master_pw, sizeof(master_pw)) != 0) {
         fprintf(stderr, "No master pw provided, aborting");
         return -1;
       }
       data_entry_t get_entry_d = {0};
       
       if (get_entry(argv[2], &get_entry_d, master_pw) == 0) {
-        printf("- Name: %s\n- Login: %s\n- Password: %s\n- Secret: %s\n- Command: %s\n- created_at: %s\n- "
-              "updated_at: %s\n- totp_seed: %s\n- totp_code: %06llu with %d seconds left\n- TOTP Config: SHA=%d, Digits=%d, Base32=%s\n",
-              get_entry_d.name, get_entry_d.login, get_entry_d.pw, get_entry_d.secret, get_entry_d.cmd,
-              get_entry_d.created_at, get_entry_d.updated_at,
-              get_entry_d.totp_seed, get_entry_d.totp_code, get_entry_d.totp_time, get_entry_d.totp_hash, get_entry_d.totp_digit, get_entry_d.totp_base32 == TOTP_BASE32_ACTIVE ? "true" : "false");
+        printf("- Name: %s\n", get_entry_d.name);
+        printf("- Password: %s\n", get_entry_d.pw);
+        printf("- Login: %s\n", get_entry_d.login);
+        printf("- Secret: %s\n", get_entry_d.secret);
+        printf("- Command: %s\n", get_entry_d.cmd);
+        printf("- TOTP seed: %s\n", get_entry_d.totp_seed);
+        printf("- TOTP Digits: %d\n", get_entry_d.totp_digit);
+        printf("- TOTP Hash: %d\n", get_entry_d.totp_hash);
+        printf("- TOTP base32: %s\n", get_entry_d.totp_base32 == TOTP_BASE32_ACTIVE ? "true" : "false");
+        if (get_entry_d.totp_digit == TOTP_DIGITS_8) {
+          printf("- TOTP Digits: %08llu with %d seconds left\n", get_entry_d.totp_code, get_entry_d.totp_time);
+        }else {
+          printf("- TOTP Digits: %06llu with %d seconds left\n", get_entry_d.totp_code, get_entry_d.totp_time);
+        }
       }
       break;
     case SUBCMD_MODIFY:
-      if (getMasterPw(master_pw) != 0) {
+      if (getMasterPw(master_pw, sizeof(master_pw)) != 0) {
         fprintf(stderr, "No master pw provided, aborting");
         return -1;
       }
@@ -185,7 +188,7 @@ int main(int argc, char *argv[]) {
       modify_entry(&update_entry, master_pw);
       break;
     case SUBCMD_DELETE:
-      if (getMasterPw(master_pw) != 0) {
+      if (getMasterPw(master_pw, sizeof(master_pw)) != 0) {
         fprintf(stderr, "No master pw provided, aborting");
         return -1;
       }
@@ -196,59 +199,42 @@ int main(int argc, char *argv[]) {
       delete_entry(argv[2], master_pw);
       break;
     case SUBCMD_SETUP:
-      printf("SETUP\n");
-      setup_unlocky();
+      setup_db();
       break;
   }
 
   return 0;
 }
 
-int getMasterPw(char *master_pw) {
+int getMasterPw(char *master_pw, size_t master_pw_len) {
+  struct termios oldt, newt;
+  if (tcgetattr(STDIN_FILENO, &oldt) != 0) {
+    return -1;  // Fail
+  }
+
+  newt = oldt;
+  newt.c_lflag &= ~ECHO; // silent input
+  if (tcsetattr(STDIN_FILENO, TCSANOW, &newt) != 0) {
+    return -1;
+  }
+
+
   printf("Enter master password: ");
   fflush(stdout);
-  if (fgets(master_pw, 100, stdin) == NULL) {
+  
+  if (fgets(master_pw, master_pw_len, stdin) == NULL) {
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);  // Restore
     printf("Input failed.\n");
     return -1;
   }
+
   master_pw[strcspn(master_pw, "\n")] = '\0';
   if (strlen(master_pw) == 0) {
     return -1;
   }
+
+  tcsetattr(STDIN_FILENO, TCSANOW, &oldt);  // Restore echo
+  printf("\n");  // Newline after pw
+
   return 0;
-}
-
-void setup_unlocky() {
-  struct passwd *pw = getpwnam("unlocky");
-  uid_t unlocky_uid = 0;
-  gid_t unlocky_gid = 0;
-  if (pw == NULL) {
-    if (system("sudo useradd -r -s /bin/false unlocky") != 0) {
-      printf("Failed to set unlocky user. Try again or set the 'unlocky' user manually.\n");
-      return;
-    }
-    pw = getpwnam("unlocky");
-    if (pw == NULL) {
-      fprintf(stderr, "Something went wrong, failed to fetch user details");
-      return;
-    }
-  }
-  unlocky_uid = pw->pw_uid;
-  unlocky_gid = pw->pw_gid;
-  printf("uid: %d, gid: %d\n", pw->pw_uid, pw->pw_gid);
-  if (chown(DB_PATH, unlocky_uid, unlocky_gid) != 0) {
-    fprintf(stderr, "chmod failed: %s\n", strerror(errno));
-    return;
-  }
-
-  if (chmod(DB_PATH, S_IRUSR | S_IWUSR) != 0) {
-    fprintf(stderr, "chmod failed: %s", strerror(errno));
-    return;
-  }
-
-  if (chmod("./build/unlocky", S_IRUSR | S_IWUSR | S_IXUSR | S_IXGRP | S_IXOTH | S_ISUID) != 0) {
-    fprintf(stderr, "setuid chmod failed: %s\n", strerror(errno));
-    return;
-  }
-  return;
 }

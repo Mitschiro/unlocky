@@ -78,7 +78,6 @@ int add_entry(data_entry_t *entry, const char *master_pw) {
   unsigned long long secret_cipher_len = 0;
   if (strlen(entry->secret) > 0) {
     secret_cipher_len = encrypt_value(entry->secret, master_pw);
-    printf("Secret encrypt len %llu", secret_cipher_len);
     if (secret_cipher_len == 0) {
       fprintf(stderr, "Secret encryption failed.\n");
       return -1;

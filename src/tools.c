@@ -63,7 +63,7 @@ int generate_totp(const char *seed, unsigned long long *totp_code,
   crypto_auth_hmacsha256_state state;
   switch (totp_hash) {
     case TOTP_HASH_SHA256:
-      crypto_auth_hmacsha256_init(&state, (unsigned char *)seed, strlen(seed));
+      crypto_auth_hmacsha256_init(&state, (unsigned char *)key, strlen((const char*)key));
       crypto_auth_hmacsha256_update(&state, counter_bytes, 8);
       crypto_auth_hmacsha256_final(&state, hash);
       break;

@@ -6,7 +6,7 @@
 #include <stdbool.h>
 // #include <stdio.h>
 
-#define DB_PATH "unlocky.db"
+#define DB_PATH "/var/lib/unlocky/unlocky.db"
 
 int init_db();
 int add_entry(data_entry_t *entry, const char *master_pw);
@@ -19,6 +19,5 @@ Creates the initial db file + configurations.
 Sets unlocky table up
 */
 int setup_db();
-void close_db(void);
 
 #endif // DB_H
